@@ -1,0 +1,1406 @@
+{
+  "name": "WF03_vinculacion_telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eventpass/telegram/codigo",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "3cda1ce8-4106-445f-b2dc-d76b597b1ded",
+      "name": "Webhook - Solicitar código Telegram",
+      "webhookId": "b590cb98-2982-477f-8075-da29abafcfc6"
+    },
+    {
+      "parameters": {
+        "jsCode": "const solicitud = $input.first().json;\n\n// Solo enviamos al subworkflow el encabezado que necesita.\nreturn [{\n  json: {\n    headers: {\n      authorization:\n        typeof solicitud.headers?.authorization === 'string'\n          ? solicitud.headers.authorization\n          : '',\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "1f89a573-eaa6-4d19-9740-d9840f0acc22",
+      "name": "Preparar autenticación de Telegram"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "UwOk41MQnPHz9dxs",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/UwOk41MQnPHz9dxs",
+          "cachedResultName": "SW_validar_sesion"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        448,
+        0
+      ],
+      "id": "fe0673e4-f1bc-4c06-9797-24ad6312f946",
+      "name": "Autenticar solicitud Telegram",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const autenticacion = $input.first().json;\n\n// Comprobamos el contrato de respuesta del subworkflow.\nif (![200, 401, 503].includes(autenticacion.status_http)) {\n  throw new Error('Respuesta de autenticación inesperada.');\n}\n\n// Una sesión rechazada no debe generar códigos.\nif (autenticacion.status_http !== 200) {\n  return [{\n    json: {\n      generar: false,\n      status_http: autenticacion.status_http,\n      respuesta: autenticacion.respuesta,\n    },\n  }];\n}\n\nconst usuario = autenticacion.respuesta?.data?.usuario;\n\nif (\n  autenticacion.respuesta?.ok !== true ||\n  typeof usuario?.usuario_id !== 'string' ||\n  !usuario.usuario_id.trim()\n) {\n  throw new Error('La autenticación no devolvió un usuario válido.');\n}\n\n// El cliente debe enviar únicamente un objeto JSON vacío.\nconst solicitud =\n  $('Webhook - Solicitar código Telegram').first().json;\n\nconst contentType = String(\n  solicitud.headers?.['content-type'] ?? ''\n)\n  .split(';')[0]\n  .trim()\n  .toLowerCase();\n\nconst cuerpo = solicitud.body;\n\nconst cuerpoValido =\n  cuerpo !== null &&\n  typeof cuerpo === 'object' &&\n  !Array.isArray(cuerpo) &&\n  Object.keys(cuerpo).length === 0;\n\nif (contentType !== 'application/json' || !cuerpoValido) {\n  return [{\n    json: {\n      generar: false,\n      status_http: contentType !== 'application/json' ? 415 : 400,\n      respuesta: {\n        ok: false,\n        error: {\n          codigo: 'SOLICITUD_INVALIDA',\n          mensaje: 'Envía un objeto JSON vacío: {}.',\n        },\n      },\n    },\n  }];\n}\n\nconst { randomBytes, createHash } = require('crypto');\n\n// Código aleatorio de 128 bits: 32 caracteres hexadecimales.\n// Se entrega al usuario, pero en Sheets guardamos su huella.\nconst codigoOriginal = randomBytes(16).toString('hex');\n\nconst huella = createHash('sha256')\n  .update(codigoOriginal, 'utf8')\n  .digest('hex');\n\nconst ahora = new Date();\nconst vencimiento = new Date(ahora.getTime() + 10 * 60 * 1000);\n\nreturn [{\n  json: {\n    generar: true,\n    status_http: 201,\n\n    registro: {\n      codigo_id: `TGC-${randomBytes(16).toString('hex')}`,\n      usuario_id: usuario.usuario_id,\n      codigo: `sha256:${huella}`,\n      creado_en: ahora.toISOString(),\n      expira_en: vencimiento.toISOString(),\n      estado: 'PENDIENTE',\n      usado_en: '',\n    },\n\n    respuesta: {\n      ok: true,\n      data: {\n        codigo: codigoOriginal,\n        expira_en: vencimiento.toISOString(),\n        comando: `/vincular ${codigoOriginal}`,\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -96
+      ],
+      "id": "410fd41d-2795-44b3-88c2-44b60d5bbd48",
+      "name": "Preparar código Telegram",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0c6245ce-c852-4c21-9818-f3e3b4f40383",
+              "leftValue": "={{ $json.generar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        -128
+      ],
+      "id": "9222ab4e-722b-4a43-affd-7b24d3909288",
+      "name": "¿Generar código Telegram?"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo",
+          "mode": "list",
+          "cachedResultName": "EP03_Telegram",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Codigos_Vinculacion",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "codigo_id": "={{ $json.registro.codigo_id }}",
+            "usuario_id": "={{ $json.registro.usuario_id }}",
+            "codigo": "={{ $json.registro.codigo }}",
+            "creado_en": "={{ $json.registro.creado_en }}",
+            "expira_en": "={{ $json.registro.expira_en }}",
+            "estado": "={{ $json.registro.estado }}",
+            "usado_en": "={{ $json.registro.usado_en }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "codigo_id",
+              "displayName": "codigo_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "codigo",
+              "displayName": "codigo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "creado_en",
+              "displayName": "creado_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "expira_en",
+              "displayName": "expira_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usado_en",
+              "displayName": "usado_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1120,
+        -208
+      ],
+      "id": "b4504814-38c2-4a12-81ed-6179e23eb457",
+      "name": "Guardar código Telegram",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $('Preparar código Telegram').first().json.respuesta }}",
+        "options": {
+          "responseCode": "={{ $('Preparar código Telegram').first().json.status_http }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1408,
+        -224
+      ],
+      "id": "2783aabf-0186-4fb2-9960-9568fded33d5",
+      "name": "Responder código Telegram"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": false,\n  \"error\": {\n    \"codigo\": \"CODIGO_TELEGRAM_NO_DISPONIBLE\",\n    \"mensaje\": \"No fue posible completar la solicitud del código de vinculación.\"\n  }\n}",
+        "options": {
+          "responseCode": 503,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1488,
+        112
+      ],
+      "id": "56994a6c-6bf6-46ec-8cd3-7719138b29b7",
+      "name": "Responder error de código Telegram"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {
+          "download": false
+        }
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        224,
+        288
+      ],
+      "id": "024f9c14-2912-438a-ac66-43228c9f4d4a",
+      "name": "Telegram - Recibir vinculación",
+      "webhookId": "8ff55fe1-a10a-4095-95e3-4f881001c4cb",
+      "credentials": {
+        "telegramApi": {
+          "id": "3CNTKyIapniIuzds",
+          "name": "EventPass - Telegram"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const actualizacion = $input.first().json;\nconst mensaje = actualizacion.message;\n\n// Solo procesamos mensajes de personas en su chat privado.\n// Ignoramos grupos, canales y mensajes enviados por bots.\nconst chatPrivadoValido =\n  mensaje?.chat?.type === 'private' &&\n  mensaje?.from?.is_bot === false &&\n  Number.isSafeInteger(mensaje.chat.id) &&\n  Number.isSafeInteger(mensaje.from.id) &&\n  mensaje.chat.id > 0 &&\n  mensaje.chat.id === mensaje.from.id;\n\nif (!chatPrivadoValido) {\n  return [{\n    json: {\n      procesar: false,\n      responder: false,\n      motivo: 'CHAT_NO_ADMITIDO',\n    },\n  }];\n}\n\nconst chatId = String(mensaje.chat.id);\nconst texto =\n  typeof mensaje.text === 'string'\n    ? mensaje.text.trim()\n    : '';\n\n// Exigimos el formato exacto que genera nuestro endpoint.\nconst coincidencia = /^\\/vincular ([a-f0-9]{32})$/.exec(texto);\n\nif (!coincidencia) {\n  return [{\n    json: {\n      procesar: false,\n      responder: true,\n      chat_id: chatId,\n      motivo: 'COMANDO_INVALIDO',\n      mensaje:\n        'Solicita un código en EventPass y envía /vincular seguido del código.',\n    },\n  }];\n}\n\nconst { createHash } = require('crypto');\n\n// Buscamos por la huella, sin propagar el código original.\nconst huella = createHash('sha256')\n  .update(coincidencia[1], 'utf8')\n  .digest('hex');\n\nreturn [{\n  json: {\n    procesar: true,\n    responder: true,\n    chat_id: chatId,\n    telegram_username:\n      typeof mensaje.from.username === 'string'\n        ? mensaje.from.username\n        : '',\n    codigo_hash: `sha256:${huella}`,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        288
+      ],
+      "id": "af084ebc-cc0e-4938-894d-6bbacbf7e81e",
+      "name": "Interpretar comando de vinculación"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7af65ebf-2f92-4262-8824-d04560dee3ad",
+              "leftValue": "={{ $json.procesar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        288
+      ],
+      "id": "b10e2bfc-f6ed-4b5d-b4c2-b63908e40d8b",
+      "name": "¿Comando de vinculación válido?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo",
+          "mode": "list",
+          "cachedResultName": "EP03_Telegram",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Codigos_Vinculacion",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "codigo",
+              "lookupValue": "={{ $json.codigo_hash }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        912,
+        240
+      ],
+      "id": "b0b86d44-e3b0-4eaa-be32-43cb8a65b7c9",
+      "name": "Buscar código de vinculación",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const comando =\n  $('Interpretar comando de vinculación').first().json;\n\nconst filas = $input.all()\n  .map(item => item.json)\n  .filter(fila => Object.keys(fila).length > 0);\n\n// Un mismo código no debería identificar varios registros.\nif (filas.length > 1) {\n  throw new Error('Se encontraron registros duplicados del código.');\n}\n\nconst codigo = filas[0];\n\nfunction rechazar() {\n  // Usamos la misma respuesta para inexistentes, vencidos y usados.\n  return [{\n    json: {\n      codigo_valido: false,\n      chat_id: comando.chat_id,\n      mensaje:\n        'El código no es válido o ya venció. Solicita uno nuevo en EventPass.',\n    },\n  }];\n}\n\nif (!codigo) {\n  return rechazar();\n}\n\n// Validamos la integridad del registro antes de utilizarlo.\nif (\n  typeof codigo.codigo_id !== 'string' ||\n  !codigo.codigo_id.trim() ||\n  typeof codigo.usuario_id !== 'string' ||\n  !codigo.usuario_id.trim() ||\n  codigo.codigo !== comando.codigo_hash\n) {\n  throw new Error('El registro del código está incompleto o es inconsistente.');\n}\n\nconst estadosPermitidos = [\n  'PENDIENTE',\n  'USADO',\n  'EXPIRADO',\n  'CANCELADO',\n];\n\nif (!estadosPermitidos.includes(codigo.estado)) {\n  throw new Error('El código tiene un estado desconocido.');\n}\n\nconst creadoEn = Date.parse(codigo.creado_en);\nconst expiraEn = Date.parse(codigo.expira_en);\nconst ahora = Date.now();\n\nif (\n  !Number.isFinite(creadoEn) ||\n  !Number.isFinite(expiraEn) ||\n  expiraEn <= creadoEn ||\n  expiraEn - creadoEn > 10 * 60 * 1000\n) {\n  throw new Error('Las fechas del código son inconsistentes.');\n}\n\nconst usadoEn = String(codigo.usado_en ?? '').trim();\n\nif (\n  codigo.estado !== 'PENDIENTE' ||\n  usadoEn !== '' ||\n  creadoEn > ahora ||\n  expiraEn <= ahora\n) {\n  return rechazar();\n}\n\nreturn [{\n  json: {\n    codigo_valido: true,\n    codigo_id: codigo.codigo_id,\n    usuario_id: codigo.usuario_id,\n    chat_id: comando.chat_id,\n    telegram_username: comando.telegram_username,\n    expira_en: codigo.expira_en,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        272
+      ],
+      "id": "17b3952b-bc16-4612-9ad0-789fe27c487d",
+      "name": "Comprobar código de vinculación",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9de9bd2b-ef2f-490c-8f0f-870a03068a96",
+              "leftValue": "={{ $json.codigo_valido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1408,
+        272
+      ],
+      "id": "6dd31f74-a199-45d2-b6b2-1cc690a44aa8",
+      "name": "¿Código Telegram válido?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0",
+          "mode": "list",
+          "cachedResultName": "EP01_Usuarios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Usuarios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "usuario_id",
+              "lookupValue": "={{ $json.usuario_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1664,
+        240
+      ],
+      "id": "3c8ed589-d21d-4acd-84e8-dc1cfbca5305",
+      "name": "Buscar usuario para vinculación",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const contexto =\n  $('Comprobar código de vinculación').first().json;\n\nif (contexto.codigo_valido !== true) {\n  throw new Error('Se recibió un código no validado.');\n}\n\nconst usuarios = $input.all()\n  .map(item => item.json)\n  .filter(fila => Object.keys(fila).length > 0);\n\nif (usuarios.length > 1) {\n  throw new Error('Hay usuarios duplicados con el mismo identificador.');\n}\n\nconst usuario = usuarios[0];\n\nif (\n  usuario &&\n  usuario.usuario_id !== contexto.usuario_id\n) {\n  throw new Error('El usuario encontrado no coincide con el código.');\n}\n\nif (\n  usuario &&\n  !['ACTIVO', 'INACTIVO'].includes(usuario.estado)\n) {\n  throw new Error('El usuario tiene un estado desconocido.');\n}\n\n// Volvemos a comprobar el vencimiento porque ya pasó\n// tiempo desde la primera consulta.\nconst vencimiento = Date.parse(contexto.expira_en);\n\nif (!Number.isFinite(vencimiento)) {\n  throw new Error('El vencimiento del código no es válido.');\n}\n\nconst permitido =\n  Boolean(usuario) &&\n  usuario.estado === 'ACTIVO' &&\n  vencimiento > Date.now();\n\nif (!permitido) {\n  return [{\n    json: {\n      usuario_vinculable: false,\n      chat_id: contexto.chat_id,\n      mensaje:\n        'No es posible vincular la cuenta. Comprueba que esté activa y solicita un código nuevo.',\n    },\n  }];\n}\n\n// No propagamos el hash de contraseña ni otros datos del usuario.\nreturn [{\n  json: {\n    usuario_vinculable: true,\n    codigo_id: contexto.codigo_id,\n    usuario_id: contexto.usuario_id,\n    chat_id: contexto.chat_id,\n    telegram_username: contexto.telegram_username,\n    expira_en: contexto.expira_en,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1888,
+        240
+      ],
+      "id": "95c9731e-e0aa-4860-a357-f038eaf33c46",
+      "name": "Validar usuario para vinculación",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "afb7c029-b602-4a30-b54c-1ef70fa34f21",
+              "leftValue": "={{ $json.usuario_vinculable }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2112,
+        240
+      ],
+      "id": "a164330a-cff8-4433-b4e4-682d0db86008",
+      "name": "¿Usuario vinculable?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo",
+          "mode": "list",
+          "cachedResultName": "EP03_Telegram",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 882727568,
+          "mode": "list",
+          "cachedResultName": "Vinculaciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo/edit#gid=882727568"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2336,
+        144
+      ],
+      "id": "d167314f-db4c-47b5-863c-8347cad4f638",
+      "name": "Leer vinculaciones existentes",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const contexto =\n  $('Validar usuario para vinculación').first().json;\n\nif (contexto.usuario_vinculable !== true) {\n  throw new Error('El usuario no está autorizado para vincularse.');\n}\n\nconst filas = $input.all()\n  .map(item => item.json)\n  .filter(fila => Object.keys(fila).length > 0);\n\nfunction texto(valor) {\n  return String(valor ?? '').trim();\n}\n\n// Comprobamos que los registros existentes sean interpretables.\nconst ids = new Set();\n\nfor (const fila of filas) {\n  const id = texto(fila.vinculacion_id);\n\n  if (\n    !id ||\n    !texto(fila.usuario_id) ||\n    !/^[1-9]\\d*$/.test(texto(fila.chat_id)) ||\n    !['ACTIVA', 'INACTIVA'].includes(fila.estado)\n  ) {\n    throw new Error('Hay una vinculación con datos inconsistentes.');\n  }\n\n  if (ids.has(id)) {\n    throw new Error('Hay identificadores de vinculación duplicados.');\n  }\n\n  ids.add(id);\n}\n\nconst activas = filas.filter(fila => fila.estado === 'ACTIVA');\n\nconst delUsuario = activas.filter(\n  fila => texto(fila.usuario_id) === contexto.usuario_id\n);\n\nconst delChat = activas.filter(\n  fila => texto(fila.chat_id) === contexto.chat_id\n);\n\n// Si la hoja ya viola la unicidad, detenemos la operación.\nif (delUsuario.length > 1 || delChat.length > 1) {\n  throw new Error('Hay varias vinculaciones activas para el usuario o chat.');\n}\n\nconst base = {\n  codigo_id: contexto.codigo_id,\n  usuario_id: contexto.usuario_id,\n  chat_id: contexto.chat_id,\n  telegram_username: contexto.telegram_username,\n  expira_en: contexto.expira_en,\n};\n\n// Revalidamos el tiempo antes de preparar cualquier escritura.\nconst vencimiento = Date.parse(contexto.expira_en);\n\nif (!Number.isFinite(vencimiento)) {\n  throw new Error('El vencimiento del código no es válido.');\n}\n\nif (vencimiento <= Date.now()) {\n  return [{\n    json: {\n      ...base,\n      resultado: 'RECHAZADO',\n      crear_vinculacion: false,\n      mensaje: 'El código venció. Solicita uno nuevo en EventPass.',\n    },\n  }];\n}\n\nconst mismaRelacion =\n  delUsuario.length === 1 &&\n  texto(delUsuario[0].chat_id) === contexto.chat_id;\n\nif (mismaRelacion) {\n  return [{\n    json: {\n      ...base,\n      resultado: 'YA_VINCULADO',\n      crear_vinculacion: false,\n      vinculacion_id: texto(delUsuario[0].vinculacion_id),\n      mensaje: 'Tu cuenta ya está vinculada a este chat.',\n    },\n  }];\n}\n\nif (delUsuario.length > 0 || delChat.length > 0) {\n  return [{\n    json: {\n      ...base,\n      resultado: 'CONFLICTO',\n      crear_vinculacion: false,\n      mensaje:\n        'No se puede crear la vinculación porque la cuenta o el chat ya tiene otra vinculación activa.',\n    },\n  }];\n}\n\nreturn [{\n  json: {\n    ...base,\n    resultado: 'PERMITIDO',\n    crear_vinculacion: true,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2560,
+        144
+      ],
+      "id": "ed86ce1e-6629-42b7-83a5-4d7816c69731",
+      "name": "Evaluar vinculación Telegram",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const datos = $input.first().json;\n\nconst resultados = [\n  'PERMITIDO',\n  'YA_VINCULADO',\n  'CONFLICTO',\n  'RECHAZADO',\n];\n\nif (!resultados.includes(datos.resultado)) {\n  throw new Error('Resultado de vinculación desconocido.');\n}\n\nif (['CONFLICTO', 'RECHAZADO'].includes(datos.resultado)) {\n  return [{\n    json: {\n      continuar: false,\n      chat_id: datos.chat_id,\n      mensaje: datos.mensaje,\n    },\n  }];\n}\n\nif (\n  typeof datos.codigo_id !== 'string' ||\n  !datos.codigo_id ||\n  typeof datos.usuario_id !== 'string' ||\n  !datos.usuario_id ||\n  !/^[1-9]\\d*$/.test(String(datos.chat_id))\n) {\n  throw new Error('Faltan identificadores para guardar la vinculación.');\n}\n\nconst vencimiento = Date.parse(datos.expira_en);\n\nif (!Number.isFinite(vencimiento)) {\n  throw new Error('El vencimiento del código no es válido.');\n}\n\nif (vencimiento <= Date.now()) {\n  return [{\n    json: {\n      continuar: false,\n      chat_id: datos.chat_id,\n      mensaje: 'El código venció. Solicita uno nuevo en EventPass.',\n    },\n  }];\n}\n\nconst crear = datos.resultado === 'PERMITIDO';\nconst ahora = new Date().toISOString();\n\n// Para una vinculación nueva, el identificador se deriva\n// del registro del código que la originó.\nconst vinculacionId = crear\n  ? `VIN-${datos.codigo_id}`\n  : datos.vinculacion_id;\n\nif (typeof vinculacionId !== 'string' || !vinculacionId) {\n  throw new Error('Falta el identificador de la vinculación.');\n}\n\nreturn [{\n  json: {\n    continuar: true,\n    crear_vinculacion: crear,\n    codigo_id: datos.codigo_id,\n    chat_id: datos.chat_id,\n\n    vinculacion: {\n      vinculacion_id: vinculacionId,\n      usuario_id: datos.usuario_id,\n      chat_id: datos.chat_id,\n      telegram_username: datos.telegram_username ?? '',\n      fecha_vinculacion: ahora,\n      estado: 'ACTIVA',\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2784,
+        144
+      ],
+      "id": "fa90bc3d-afe9-44c6-8ae3-7432d9c7072f",
+      "name": "Preparar guardado de vinculación",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d376915e-2678-43ed-902f-0e18aea56973",
+              "leftValue": "={{ $json.continuar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3008,
+        144
+      ],
+      "id": "f822e066-1674-4dad-ae73-542b8431b6b7",
+      "name": "¿Continuar guardado Telegram?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "00f9038d-ec5f-4687-9549-66ed0b31a5c4",
+              "leftValue": "={{ $json.crear_vinculacion }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3232,
+        48
+      ],
+      "id": "10940196-b4be-4b95-bc24-77032ab2bc2e",
+      "name": "¿Crear vinculación Telegram?"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo",
+          "mode": "list",
+          "cachedResultName": "EP03_Telegram",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 882727568,
+          "mode": "list",
+          "cachedResultName": "Vinculaciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo/edit#gid=882727568"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "vinculacion_id": "={{ $json.vinculacion.vinculacion_id }}",
+            "usuario_id": "={{ $json.vinculacion.usuario_id }}",
+            "chat_id": "={{ $json.vinculacion.chat_id }}",
+            "telegram_username": "={{ $json.vinculacion.telegram_username }}",
+            "fecha_vinculacion": "={{ $json.vinculacion.fecha_vinculacion }}",
+            "estado": "={{ $json.vinculacion.estado }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "vinculacion_id",
+              "displayName": "vinculacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "telegram_username",
+              "displayName": "telegram_username",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_vinculacion",
+              "displayName": "fecha_vinculacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3456,
+        -48
+      ],
+      "id": "caa61d58-62ac-48db-9d27-b5da89510ee4",
+      "name": "Guardar vinculación Telegram",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo",
+          "mode": "list",
+          "cachedResultName": "EP03_Telegram",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Codigos_Vinculacion",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "codigo_id": "={{ $('Preparar guardado de vinculación').first().json.codigo_id }}",
+            "estado": "USADO",
+            "usado_en": "={{ new Date().toISOString() }}"
+          },
+          "matchingColumns": [
+            "codigo_id"
+          ],
+          "schema": [
+            {
+              "id": "codigo_id",
+              "displayName": "codigo_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "codigo",
+              "displayName": "codigo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "creado_en",
+              "displayName": "creado_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "expira_en",
+              "displayName": "expira_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usado_en",
+              "displayName": "usado_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3744,
+        -192
+      ],
+      "id": "e3254f32-9b07-43ab-89bb-09a53b178994",
+      "name": "Marcar código utilizado",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.mensaje }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3456,
+        736
+      ],
+      "id": "1c6d53b6-62d2-4af3-8612-55aaba000533",
+      "name": "Telegram - Informar rechazo",
+      "webhookId": "740d2bfb-dc9d-4eae-b3b3-3f41751ca04b",
+      "credentials": {
+        "telegramApi": {
+          "id": "3CNTKyIapniIuzds",
+          "name": "EventPass - Telegram"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Preparar guardado de vinculación').first().json.chat_id }}",
+        "text": "✅ Tu cuenta de EventPass está vinculada a este chat.  La vinculación está activa y el código presentado quedó utilizado.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3968,
+        -288
+      ],
+      "id": "5c5f1a63-b2e2-4445-9b0c-236f3e3fade3",
+      "name": "Telegram - Confirmar vinculación",
+      "webhookId": "33c1982e-af63-4c56-9680-216281dac68c",
+      "credentials": {
+        "telegramApi": {
+          "id": "3CNTKyIapniIuzds",
+          "name": "EventPass - Telegram"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "13bf4ec5-c1ba-4154-8aeb-3cd219d8a407",
+              "leftValue": "={{ $json.responder }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        960,
+        528
+      ],
+      "id": "1015cd00-0459-4382-8566-6ebffdb20976",
+      "name": "¿Responder ayuda Telegram?"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Interpretar comando de vinculación').first().json.chat_id }}",
+        "text": "No fue posible completar la confirmación de vinculación por un problema técnico. Es posible que parte de la operación se haya guardado. Inténtalo más tarde.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2880,
+        944
+      ],
+      "id": "60dbca23-ef81-4136-82be-ccb8a36b41a8",
+      "name": "Telegram - Informar error técnico",
+      "webhookId": "5dfe09d3-78bc-4f84-aacc-5fae1235b73a",
+      "credentials": {
+        "telegramApi": {
+          "id": "3CNTKyIapniIuzds",
+          "name": "EventPass - Telegram"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Solicitar código Telegram": {
+      "main": [
+        [
+          {
+            "node": "Preparar autenticación de Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar autenticación de Telegram": {
+      "main": [
+        [
+          {
+            "node": "Autenticar solicitud Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Autenticar solicitud Telegram": {
+      "main": [
+        [
+          {
+            "node": "Preparar código Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de código Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar código Telegram": {
+      "main": [
+        [
+          {
+            "node": "¿Generar código Telegram?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de código Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Generar código Telegram?": {
+      "main": [
+        [
+          {
+            "node": "Guardar código Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder código Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar código Telegram": {
+      "main": [
+        [
+          {
+            "node": "Responder código Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de código Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram - Recibir vinculación": {
+      "main": [
+        [
+          {
+            "node": "Interpretar comando de vinculación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpretar comando de vinculación": {
+      "main": [
+        [
+          {
+            "node": "¿Comando de vinculación válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Comando de vinculación válido?": {
+      "main": [
+        [
+          {
+            "node": "Buscar código de vinculación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Responder ayuda Telegram?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar código de vinculación": {
+      "main": [
+        [
+          {
+            "node": "Comprobar código de vinculación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Informar error técnico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comprobar código de vinculación": {
+      "main": [
+        [
+          {
+            "node": "¿Código Telegram válido?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Informar error técnico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Código Telegram válido?": {
+      "main": [
+        [
+          {
+            "node": "Buscar usuario para vinculación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Informar rechazo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar usuario para vinculación": {
+      "main": [
+        [
+          {
+            "node": "Validar usuario para vinculación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Informar error técnico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar usuario para vinculación": {
+      "main": [
+        [
+          {
+            "node": "¿Usuario vinculable?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Informar error técnico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Usuario vinculable?": {
+      "main": [
+        [
+          {
+            "node": "Leer vinculaciones existentes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Informar rechazo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer vinculaciones existentes": {
+      "main": [
+        [
+          {
+            "node": "Evaluar vinculación Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Informar error técnico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluar vinculación Telegram": {
+      "main": [
+        [
+          {
+            "node": "Preparar guardado de vinculación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Informar error técnico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar guardado de vinculación": {
+      "main": [
+        [
+          {
+            "node": "¿Continuar guardado Telegram?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Informar error técnico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Continuar guardado Telegram?": {
+      "main": [
+        [
+          {
+            "node": "¿Crear vinculación Telegram?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Informar rechazo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Crear vinculación Telegram?": {
+      "main": [
+        [
+          {
+            "node": "Guardar vinculación Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marcar código utilizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar vinculación Telegram": {
+      "main": [
+        [
+          {
+            "node": "Marcar código utilizado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Informar error técnico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar código utilizado": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Confirmar vinculación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Informar error técnico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Responder ayuda Telegram?": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Informar rechazo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "1f65640f-f27d-44bc-8468-5904dd1f57dd",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+  },
+  "nodeGroups": [],
+  "id": "v0HVXGHrtVDK6vov",
+  "tags": []
+}

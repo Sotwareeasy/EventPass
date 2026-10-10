@@ -1,0 +1,437 @@
+{
+  "name": "WF05_catalogo_publico",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "eventpass/eventos",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5d3bce0c-5c2c-4315-acbc-6a5815783ff1",
+      "name": "Webhook - Catálogo público",
+      "webhookId": "0f0d89cc-0ac0-48aa-80b1-d4f4ac772f11"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1dMO2t9hHFzOJ5ItqBs7uvoTxXTGcndUTGJ9qOuNgqrM",
+          "mode": "list",
+          "cachedResultName": "EP04_Eventos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1dMO2t9hHFzOJ5ItqBs7uvoTxXTGcndUTGJ9qOuNgqrM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Eventos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1dMO2t9hHFzOJ5ItqBs7uvoTxXTGcndUTGJ9qOuNgqrM/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        0
+      ],
+      "id": "92fedac5-4dc6-46d0-8152-5e57225616ea",
+      "name": "Leer eventos del catálogo",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Una hoja vacía puede producir un objeto vacío.\n// Lo excluimos, pero conservamos los registros existentes.\nconst eventos = $input.all()\n  .map(item => item.json)\n  .filter(fila => Object.keys(fila).length > 0);\n\nreturn [{\n  json: {\n    eventos,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -96
+      ],
+      "id": "4a928ac0-3288-4aa3-be1d-9b57b102a2e3",
+      "name": "Agrupar eventos"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "list",
+          "cachedResultName": "EP06_Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        -96
+      ],
+      "id": "0527f484-14f3-4377-a1b6-7694e45b552b",
+      "name": "Leer inscripciones del catálogo",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const eventos = $('Agrupar eventos').first().json.eventos;\n\nconst inscripciones = $input.all()\n  .map(item => item.json)\n  .filter(fila => Object.keys(fila).length > 0);\n\nconst ahora = Date.now();\nconst confirmadasPorEvento = new Map();\nconst idsEventos = new Set();\n\nfunction texto(valor) {\n  return typeof valor === 'string' ? valor.trim() : '';\n}\n\n// Contamos únicamente las inscripciones que ocupan cupo.\nfor (const inscripcion of inscripciones) {\n  if (inscripcion.estado !== 'CONFIRMADA') {\n    continue;\n  }\n\n  const eventoId = texto(inscripcion.evento_id);\n\n  if (!eventoId || !inscripcion.inscripcion_id) {\n    throw new Error('Existe una inscripción confirmada incompleta.');\n  }\n\n  confirmadasPorEvento.set(\n    eventoId,\n    (confirmadasPorEvento.get(eventoId) ?? 0) + 1\n  );\n}\n\nconst listado = [];\n\nfor (const evento of eventos) {\n  // El catálogo público excluye borradores, cerrados y cancelados.\n  if (evento.estado !== 'PUBLICADO') {\n    continue;\n  }\n\n  const eventoId = texto(evento.evento_id);\n\n  if (!eventoId || idsEventos.has(eventoId)) {\n    throw new Error('Existe un evento publicado sin ID o con ID duplicado.');\n  }\n\n  idsEventos.add(eventoId);\n\n  const fecha = texto(evento.fecha);\n  const hora = texto(evento.hora);\n\n  const fechaUTC = /^\\d{4}-\\d{2}-\\d{2}$/.test(fecha)\n    ? new Date(`${fecha}T00:00:00.000Z`)\n    : new Date(NaN);\n\n  const fechaValida =\n    Number.isFinite(fechaUTC.getTime()) &&\n    fechaUTC.toISOString().slice(0, 10) === fecha;\n\n  const horaValida = /^([01]\\d|2[0-3]):[0-5]\\d$/.test(hora);\n\n  if (!fechaValida || !horaValida) {\n    throw new Error('Existe un evento publicado con fecha u hora inválida.');\n  }\n\n  // Fecha y hora de Colombia.\n  const inicio = new Date(`${fecha}T${hora}:00-05:00`).getTime();\n\n  if (inicio <= ahora) {\n    continue;\n  }\n\n  const capacidad = Number(evento.capacidad);\n  const confirmadas = confirmadasPorEvento.get(eventoId) ?? 0;\n\n  if (!Number.isSafeInteger(capacidad) || capacidad <= 0) {\n    throw new Error('Existe un evento publicado con capacidad inválida.');\n  }\n\n  if (confirmadas > capacidad) {\n    throw new Error('Las inscripciones confirmadas exceden la capacidad.');\n  }\n\n  const disponibles = capacidad - confirmadas;\n\n  // Seleccionamos explícitamente los campos públicos.\n  // No enviamos filas internas ni datos personales de inscritos.\n  listado.push({\n    evento_id: eventoId,\n    nombre: texto(evento.nombre),\n    categoria: texto(evento.categoria),\n    descripcion: texto(evento.descripcion),\n    fecha,\n    hora,\n    zona_horaria: 'America/Bogota',\n    lugar: texto(evento.lugar),\n    capacidad,\n    imagen_url: texto(evento.imagen_url),\n    organizador: texto(evento.organizador),\n    estado: 'PUBLICADO',\n    inscripciones_confirmadas: confirmadas,\n    cupos_disponibles: disponibles,\n    disponibilidad: disponibles > 0 ? 'CON_CUPOS' : 'LISTA_ESPERA',\n  });\n}\n\n// Primero aparecen los eventos más próximos.\n// Los formatos AAAA-MM-DD y HH:mm permiten ordenar así.\nlistado.sort((a, b) =>\n  `${a.fecha}T${a.hora}`.localeCompare(`${b.fecha}T${b.hora}`) ||\n  a.evento_id.localeCompare(b.evento_id)\n);\n\nconst consultaId = `CONS-${$execution.id}`;\n\nreturn [{\n  json: {\n    respuesta: {\n      ok: true,\n      data: {\n        eventos: listado,\n      },\n      meta: {\n        total: listado.length,\n        consulta_id: consultaId,\n      },\n    },\n    consulta: {\n      consulta_id: consultaId,\n      fecha: new Date().toISOString(),\n      tipo: 'LISTADO',\n      evento_id: '',\n      categoria: '',\n      resultado_count: listado.length,\n      visitor_id: `ANON-${$execution.id}`,\n      status_http: 200,\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -160
+      ],
+      "id": "86ad7843-6722-4dd4-8526-3f51efcb89e7",
+      "name": "Construir listado público",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1IbJ8En3Ut_tPr-YTruziiVeCD5ZHBqoXgI1auZl84AY",
+          "mode": "list",
+          "cachedResultName": "EP05_Catalogo_Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IbJ8En3Ut_tPr-YTruziiVeCD5ZHBqoXgI1auZl84AY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Consultas_Catalogo",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IbJ8En3Ut_tPr-YTruziiVeCD5ZHBqoXgI1auZl84AY/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "consulta_id": "={{ $json.consulta.consulta_id }}",
+            "fecha": "={{ $json.consulta.fecha }}",
+            "tipo": "={{ $json.consulta.tipo }}",
+            "evento_id": "={{ $json.consulta.evento_id }}",
+            "categoria": "={{ $json.consulta.categoria }}",
+            "resultado_count": "={{ $json.consulta.resultado_count }}",
+            "visitor_id": "={{ $json.consulta.visitor_id }}",
+            "status_http": "={{ $json.consulta.status_http }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "consulta_id",
+              "displayName": "consulta_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "evento_id",
+              "displayName": "evento_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "categoria",
+              "displayName": "categoria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resultado_count",
+              "displayName": "resultado_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "visitor_id",
+              "displayName": "visitor_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_http",
+              "displayName": "status_http",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1328,
+        -288
+      ],
+      "id": "2ed8dd28-fccd-4b13-8a5d-46a046ecd815",
+      "name": "Registrar consulta del catálogo",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $('Aplicar filtros del catálogo').first().json.respuesta }}",
+        "options": {
+          "responseCode": "={{ $('Aplicar filtros del catálogo').first().json.consulta.status_http }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1568,
+        -320
+      ],
+      "id": "e99443ec-c6f9-460f-8f38-feb459f2373d",
+      "name": "Responder catálogo"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"data\": null,\n  \"error\": {\n    \"codigo\": \"CATALOGO_NO_DISPONIBLE\",\n    \"mensaje\": \"No fue posible consultar el catálogo. Intenta nuevamente más tarde.\"\n  }\n}",
+        "options": {
+          "responseCode": 503,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1248,
+        304
+      ],
+      "id": "ddd7f1a7-91f5-41e2-80ea-598b34edd5d1",
+      "name": "Responder error del catálogo"
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $input.first().json;\nconst query = $('Webhook - Catálogo público').first().json.query ?? {};\n\nconst errores = [];\nconst parametrosPermitidos = ['evento_id', 'categoria', 'visitor_id'];\n\nconst categoriasPermitidas = [\n  'Networking tecnológico',\n  'Networking emprendedor',\n  'Networking profesional',\n];\n\nfunction tieneParametro(nombre) {\n  return Object.prototype.hasOwnProperty.call(query, nombre);\n}\n\n// Solo aceptamos parámetros de texto individuales, no listas ni objetos.\nfunction leerParametro(nombre, maximo) {\n  if (!tieneParametro(nombre)) {\n    return '';\n  }\n\n  const valor = query[nombre];\n\n  if (\n    typeof valor !== 'string' ||\n    !valor.trim() ||\n    valor.trim().length > maximo\n  ) {\n    errores.push(`El parámetro ${nombre} no tiene un formato válido.`);\n    return '';\n  }\n\n  return valor.trim();\n}\n\nif (Object.keys(query).some(clave => !parametrosPermitidos.includes(clave))) {\n  errores.push('La consulta contiene parámetros no admitidos.');\n}\n\nconst eventoId = leerParametro('evento_id', 80);\nconst categoria = leerParametro('categoria', 80);\nconst visitante = leerParametro('visitor_id', 80);\n\nconst identificadorValido = /^[A-Za-z0-9_-]{1,80}$/;\n\nif (eventoId && !identificadorValido.test(eventoId)) {\n  errores.push('evento_id contiene caracteres no permitidos.');\n}\n\nif (categoria && !categoriasPermitidas.includes(categoria)) {\n  errores.push('La categoría no es válida.');\n}\n\nif (visitante && !identificadorValido.test(visitante)) {\n  errores.push('visitor_id contiene caracteres no permitidos.');\n}\n\nif (tieneParametro('evento_id') && tieneParametro('categoria')) {\n  errores.push('Utiliza evento_id o categoria, pero no ambos a la vez.');\n}\n\n// Clasificamos la intención de la consulta para el registro.\nconst tipo = tieneParametro('evento_id')\n  ? 'DETALLE'\n  : tieneParametro('categoria')\n    ? 'FILTRO'\n    : 'LISTADO';\n\nlet eventos = base.respuesta.data.eventos;\nlet statusHttp = 200;\nlet error = null;\n\nif (errores.length > 0) {\n  eventos = [];\n  statusHttp = 400;\n\n  error = {\n    codigo: 'CONSULTA_INVALIDA',\n    mensaje: 'Revisa los parámetros de la consulta.',\n    detalles: errores,\n  };\n} else if (eventoId) {\n  eventos = eventos.filter(evento => evento.evento_id === eventoId);\n\n  if (eventos.length === 0) {\n    statusHttp = 404;\n    error = {\n      codigo: 'EVENTO_NO_ENCONTRADO',\n      mensaje: 'No se encontró un evento público disponible con ese ID.',\n    };\n  }\n} else if (categoria) {\n  eventos = eventos.filter(evento => evento.categoria === categoria);\n}\n\n// Si no se proporciona un visitante válido, conservamos el ID anónimo.\n// visitor_id sirve para trazabilidad, nunca para autenticar usuarios.\nconst visitorId = visitante && identificadorValido.test(visitante)\n  ? visitante\n  : base.consulta.visitor_id;\n\nconst respuesta = {\n  ok: statusHttp === 200,\n  data: statusHttp === 200 ? { eventos } : null,\n  meta: {\n    total: eventos.length,\n    consulta_id: base.consulta.consulta_id,\n    tipo,\n  },\n};\n\nif (error) {\n  respuesta.error = error;\n}\n\nreturn [{\n  json: {\n    respuesta,\n    consulta: {\n      ...base.consulta,\n      tipo,\n      evento_id: identificadorValido.test(eventoId) ? eventoId : '',\n      categoria: categoriasPermitidas.includes(categoria) ? categoria : '',\n      resultado_count: eventos.length,\n      visitor_id: visitorId,\n      status_http: statusHttp,\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1072,
+        -304
+      ],
+      "id": "7d7046ce-7b8d-4e64-bcd8-63db568f8943",
+      "name": "Aplicar filtros del catálogo",
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Catálogo público": {
+      "main": [
+        [
+          {
+            "node": "Leer eventos del catálogo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer eventos del catálogo": {
+      "main": [
+        [
+          {
+            "node": "Agrupar eventos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error del catálogo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agrupar eventos": {
+      "main": [
+        [
+          {
+            "node": "Leer inscripciones del catálogo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer inscripciones del catálogo": {
+      "main": [
+        [
+          {
+            "node": "Construir listado público",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error del catálogo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir listado público": {
+      "main": [
+        [
+          {
+            "node": "Aplicar filtros del catálogo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error del catálogo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar consulta del catálogo": {
+      "main": [
+        [
+          {
+            "node": "Responder catálogo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error del catálogo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aplicar filtros del catálogo": {
+      "main": [
+        [
+          {
+            "node": "Registrar consulta del catálogo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error del catálogo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "c7e6c173-5fd4-47ae-affe-73773f65e1dd",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+  },
+  "nodeGroups": [],
+  "id": "5dxE47m3Aw4bBIRU",
+  "tags": []
+}

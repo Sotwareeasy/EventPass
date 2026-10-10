@@ -1,0 +1,535 @@
+{
+  "name": "Webhook - Desactivar mi cuenta",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "DELETE",
+        "path": "eventpass/usuarios/me",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -288,
+        -64
+      ],
+      "id": "ed44fdeb-13b6-4f2a-b870-3abd760fbfce",
+      "name": "Webhook - Desactivar mi cuenta",
+      "webhookId": "ed45fbba-f718-46cc-a70f-bd8bb6be988c"
+    },
+    {
+      "parameters": {
+        "jsCode": "const solicitud = $input.first().json;\n\nreturn [{\n  json: {\n    headers: {\n      authorization:\n        typeof solicitud.headers?.authorization === 'string'\n          ? solicitud.headers.authorization\n          : '',\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -64,
+        -64
+      ],
+      "id": "418ad534-3dd2-42c4-acbc-4d3dfc40ddba",
+      "name": "Preparar autenticación de desactivación"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "UwOk41MQnPHz9dxs",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/UwOk41MQnPHz9dxs",
+          "cachedResultName": "SW_validar_sesion"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        160,
+        -64
+      ],
+      "id": "e2a61b14-2f81-42a3-8320-7bb6928ae97b",
+      "name": "Autenticar desactivación",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const autenticacion = $input.first().json;\n\nif (![200, 401, 503].includes(autenticacion.status_http)) {\n  throw new Error('La autenticación devolvió un resultado inesperado.');\n}\n\nif (autenticacion.status_http !== 200) {\n  return [{\n    json: {\n      desactivar: false,\n      status_http: autenticacion.status_http,\n      respuesta: autenticacion.respuesta,\n    },\n  }];\n}\n\nconst usuario = autenticacion.respuesta?.data?.usuario;\n\nif (autenticacion.respuesta?.ok !== true || !usuario?.usuario_id) {\n  throw new Error('No se obtuvo un usuario autenticado válido.');\n}\n\nconst solicitud = $('Webhook - Desactivar mi cuenta').first().json;\n\nconst contentType = String(\n  solicitud.headers?.['content-type'] ?? ''\n).split(';')[0].trim().toLowerCase();\n\nconst cuerpo = solicitud.body;\n\nconst confirmacionValida =\n  cuerpo !== null &&\n  typeof cuerpo === 'object' &&\n  !Array.isArray(cuerpo) &&\n  Object.keys(cuerpo).length === 1 &&\n  cuerpo.confirmacion === 'DESACTIVAR';\n\nif (contentType !== 'application/json' || !confirmacionValida) {\n  return [{\n    json: {\n      desactivar: false,\n      status_http: contentType !== 'application/json' ? 415 : 400,\n      respuesta: {\n        ok: false,\n        error: {\n          codigo: 'CONFIRMACION_INVALIDA',\n          mensaje: 'Envía un objeto JSON con confirmacion igual a DESACTIVAR.',\n        },\n      },\n    },\n  }];\n}\n\nconst ahora = new Date().toISOString();\n\nreturn [{\n  json: {\n    desactivar: true,\n    status_http: 200,\n\n    // La cuenta objetivo procede exclusivamente de la sesión.\n    usuario_id: usuario.usuario_id,\n    estado: 'INACTIVO',\n    fecha_actualizacion: ahora,\n\n    auditoria: {\n      auditoria_id: `AUD-USR-DEACTIVATE-${$execution.id}`,\n      usuario_id: usuario.usuario_id,\n      accion: 'DEACTIVATE',\n      fecha: ahora,\n      resultado: 'EXITO',\n      detalle: JSON.stringify({\n        estado_anterior: 'ACTIVO',\n        estado_nuevo: 'INACTIVO',\n        origen: 'PERFIL_AUTENTICADO',\n      }),\n    },\n\n    respuesta: {\n      ok: true,\n      mensaje: 'Tu cuenta fue desactivada.',\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        -160
+      ],
+      "id": "839728e8-c331-4b40-b720-e6a6bcc348df",
+      "name": "Preparar desactivación de cuenta",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "3ce3170e-6ece-4e21-8638-30690f0a583f",
+              "leftValue": "={{ $json.desactivar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        544,
+        -288
+      ],
+      "id": "4d1c0fdb-ada9-46b7-b213-c45d439617b0",
+      "name": "¿Desactivar cuenta?"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0",
+          "mode": "list",
+          "cachedResultName": "EP01_Usuarios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Usuarios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "usuario_id": "={{ $json.usuario_id }}",
+            "estado": "={{ $json.estado }}",
+            "fecha_actualizacion": "={{ $json.fecha_actualizacion }}"
+          },
+          "matchingColumns": [
+            "usuario_id"
+          ],
+          "schema": [
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "email_normalizado",
+              "displayName": "email_normalizado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "password_hash",
+              "displayName": "password_hash",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "password_salt",
+              "displayName": "password_salt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_registro",
+              "displayName": "fecha_registro",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "fecha_actualizacion",
+              "displayName": "fecha_actualizacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        768,
+        -336
+      ],
+      "id": "1916c277-208c-41d8-9560-34891f0216ad",
+      "name": "Desactivar usuario",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0",
+          "mode": "list",
+          "cachedResultName": "EP01_Usuarios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 493589976,
+          "mode": "list",
+          "cachedResultName": "Auditoria_Usuarios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0/edit#gid=493589976"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "auditoria_id": "={{ $('Preparar desactivación de cuenta').first().json.auditoria.auditoria_id }}",
+            "usuario_id": "={{ $('Preparar desactivación de cuenta').first().json.auditoria.usuario_id }}",
+            "accion": "={{ $('Preparar desactivación de cuenta').first().json.auditoria.accion }}",
+            "fecha": "={{ $('Preparar desactivación de cuenta').first().json.auditoria.fecha }}",
+            "resultado": "={{ $('Preparar desactivación de cuenta').first().json.auditoria.resultado }}",
+            "detalle": "={{ $('Preparar desactivación de cuenta').first().json.auditoria.detalle }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "auditoria_id",
+              "displayName": "auditoria_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "accion",
+              "displayName": "accion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resultado",
+              "displayName": "resultado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1024,
+        -336
+      ],
+      "id": "bf6368ea-623f-4c06-b251-41ef3e9bdc9e",
+      "name": "Registrar auditoría de desactivación",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $('Preparar desactivación de cuenta').first().json.respuesta }}",
+        "options": {
+          "responseCode": "={{ $('Preparar desactivación de cuenta').first().json.status_http }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1280,
+        -400
+      ],
+      "id": "c29dfd02-2d06-400a-b8a1-25e32341b085",
+      "name": "Responder desactivación"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": false,\n  \"error\": {\n    \"codigo\": \"DESACTIVACION_NO_COMPLETADA\",\n    \"mensaje\": \"No fue posible completar la operación de desactivación.\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        768,
+        128
+      ],
+      "id": "079934b3-36f0-4288-b70a-79660445805e",
+      "name": "Responder error de desactivación"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Desactivar mi cuenta": {
+      "main": [
+        [
+          {
+            "node": "Preparar autenticación de desactivación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar autenticación de desactivación": {
+      "main": [
+        [
+          {
+            "node": "Autenticar desactivación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Autenticar desactivación": {
+      "main": [
+        [
+          {
+            "node": "Preparar desactivación de cuenta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de desactivación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar desactivación de cuenta": {
+      "main": [
+        [
+          {
+            "node": "¿Desactivar cuenta?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de desactivación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Desactivar cuenta?": {
+      "main": [
+        [
+          {
+            "node": "Desactivar usuario",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de desactivación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Desactivar usuario": {
+      "main": [
+        [
+          {
+            "node": "Registrar auditoría de desactivación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de desactivación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar auditoría de desactivación": {
+      "main": [
+        [
+          {
+            "node": "Responder desactivación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de desactivación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder desactivación": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "d5d19028-d2d1-4963-8055-7b69936536b1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+  },
+  "nodeGroups": [],
+  "id": "u0DIHUqh5Il6XRW7",
+  "tags": []
+}

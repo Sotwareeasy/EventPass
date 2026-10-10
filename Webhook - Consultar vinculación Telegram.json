@@ -1,0 +1,316 @@
+{
+  "name": "Webhook - Consultar vinculación Telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "eventpass/telegram/vinculacion",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "48acf523-7555-4a19-b815-d4436a61ae83",
+      "name": "Webhook - Consultar vinculación Telegram",
+      "webhookId": "bed8127a-61a8-4bd1-aaef-c61dc70335c0"
+    },
+    {
+      "parameters": {
+        "jsCode": "const solicitud = $input.first().json;\n\nreturn [{\n  json: {\n    headers: {\n      authorization:\n        typeof solicitud.headers?.authorization === 'string'\n          ? solicitud.headers.authorization\n          : '',\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "94b5a398-6c39-4bb1-b73e-d3c83d250359",
+      "name": "Preparar autenticación de consulta Telegram"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "UwOk41MQnPHz9dxs",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/UwOk41MQnPHz9dxs",
+          "cachedResultName": "SW_validar_sesion"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        448,
+        0
+      ],
+      "id": "786d92fd-f358-4cb5-8a43-9c3c86745fcb",
+      "name": "Autenticar consulta Telegram",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "fc0a27e4-3d59-45b0-9953-3b15dc71cce0",
+              "leftValue": "={{ $json.status_http === 200 && $json.respuesta?.ok === true && typeof $json.respuesta?.data?.usuario?.usuario_id === 'string' && $json.respuesta.data.usuario.usuario_id.length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        -96
+      ],
+      "id": "601395f4-700a-4940-ae03-44f38c0fa6cc",
+      "name": "¿Consulta Telegram autorizada?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo",
+          "mode": "list",
+          "cachedResultName": "EP03_Telegram",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 882727568,
+          "mode": "list",
+          "cachedResultName": "Vinculaciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo/edit#gid=882727568"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "usuario_id",
+              "lookupValue": "={{ $json.respuesta.data.usuario.usuario_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        832,
+        -256
+      ],
+      "id": "36368a95-682b-4400-8218-0a9341598475",
+      "name": "Buscar mi vinculación Telegram",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const autenticacion =\n  $('Autenticar consulta Telegram').first().json;\n\nconst usuarioId =\n  autenticacion.respuesta?.data?.usuario?.usuario_id;\n\nif (\n  autenticacion.status_http !== 200 ||\n  autenticacion.respuesta?.ok !== true ||\n  typeof usuarioId !== 'string' ||\n  !usuarioId\n) {\n  throw new Error('No hay un usuario autenticado válido.');\n}\n\nconst filas = $input.all()\n  .map(item => item.json)\n  .filter(fila => Object.keys(fila).length > 0);\n\nconst identificadores = new Set();\n\nfor (const fila of filas) {\n  if (\n    fila.usuario_id !== usuarioId ||\n    typeof fila.vinculacion_id !== 'string' ||\n    !fila.vinculacion_id.trim() ||\n    !['ACTIVA', 'INACTIVA'].includes(fila.estado)\n  ) {\n    throw new Error('La vinculación contiene datos inconsistentes.');\n  }\n\n  if (identificadores.has(fila.vinculacion_id)) {\n    throw new Error('Hay identificadores de vinculación duplicados.');\n  }\n\n  identificadores.add(fila.vinculacion_id);\n}\n\nconst activas = filas.filter(fila => fila.estado === 'ACTIVA');\n\nif (activas.length > 1) {\n  throw new Error('El usuario tiene varias vinculaciones activas.');\n}\n\nconst vinculacion = activas[0];\n\nif (\n  vinculacion &&\n  (\n    !/^[1-9]\\d*$/.test(String(vinculacion.chat_id)) ||\n    !Number.isFinite(Date.parse(vinculacion.fecha_vinculacion))\n  )\n) {\n  throw new Error('La vinculación activa está incompleta.');\n}\n\n// Devolvemos solo los datos que necesita la interfaz.\n// No exponemos el chat_id ni los códigos de vinculación.\nreturn [{\n  json: {\n    status_http: 200,\n    respuesta: {\n      ok: true,\n      data: {\n        telegram: {\n          vinculado: Boolean(vinculacion),\n          telegram_username: vinculacion\n            ? String(vinculacion.telegram_username ?? '')\n            : null,\n          fecha_vinculacion: vinculacion\n            ? vinculacion.fecha_vinculacion\n            : null,\n        },\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        -352
+      ],
+      "id": "f5dfa2a5-c0d3-4f6f-9669-45e654008b40",
+      "name": "Preparar respuesta de vinculación",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.respuesta }}",
+        "options": {
+          "responseCode": "={{ $json.status_http }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1456,
+        -272
+      ],
+      "id": "c949a0bd-5180-49ca-829d-f2fa0a3efe71",
+      "name": "Responder consulta Telegram"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": false,\n  \"error\": {\n    \"codigo\": \"CONSULTA_TELEGRAM_NO_DISPONIBLE\",\n    \"mensaje\": \"No fue posible consultar la vinculación de Telegram.\"\n  }\n}",
+        "options": {
+          "responseCode": 503,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1488,
+        80
+      ],
+      "id": "b0e835b1-3c8d-4287-b5fc-9e18d7758ebb",
+      "name": "Responder error de consulta Telegram"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Consultar vinculación Telegram": {
+      "main": [
+        [
+          {
+            "node": "Preparar autenticación de consulta Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar autenticación de consulta Telegram": {
+      "main": [
+        [
+          {
+            "node": "Autenticar consulta Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Autenticar consulta Telegram": {
+      "main": [
+        [
+          {
+            "node": "¿Consulta Telegram autorizada?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de consulta Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Consulta Telegram autorizada?": {
+      "main": [
+        [
+          {
+            "node": "Buscar mi vinculación Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder consulta Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar mi vinculación Telegram": {
+      "main": [
+        [
+          {
+            "node": "Preparar respuesta de vinculación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de consulta Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar respuesta de vinculación": {
+      "main": [
+        [
+          {
+            "node": "Responder consulta Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de consulta Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6744de74-bff6-4ee4-9201-fa7ccad992d1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+  },
+  "nodeGroups": [],
+  "id": "wWz6lTkpEbzv3Jnr",
+  "tags": []
+}

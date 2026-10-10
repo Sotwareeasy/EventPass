@@ -1,0 +1,803 @@
+{
+  "name": "WF01_usuarios_crud",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eventpass/usuarios",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -96,
+        -16
+      ],
+      "id": "4fa4933c-b5d1-4989-8162-3e8785e4af49",
+      "name": "Registrar usuario",
+      "webhookId": "9ed136b2-ae63-47d7-802f-904aaa02e932"
+    },
+    {
+      "parameters": {
+        "jsCode": "const solicitud = $input.first().json;\nconst errores = [];\n\nconst contentType = String(\n  solicitud.headers?.['content-type'] ?? ''\n).split(';')[0].trim().toLowerCase();\n\nconst cuerpo = solicitud.body;\n\nconst esObjeto =\n  cuerpo !== null &&\n  typeof cuerpo === 'object' &&\n  !Array.isArray(cuerpo);\n\nconst datos = esObjeto ? cuerpo : {};\nlet statusHttp = 200;\n\nif (contentType !== 'application/json') {\n  statusHttp = 415;\n  errores.push('Envía el cuerpo con Content-Type application/json.');\n}\n\nif (!esObjeto) {\n  errores.push('El cuerpo debe ser un objeto JSON.');\n}\n\n// Solo aceptamos los campos previstos para el registro.\nconst camposPermitidos = ['nombre', 'email', 'password'];\n\nif (Object.keys(datos).some(campo => !camposPermitidos.includes(campo))) {\n  errores.push('La solicitud contiene campos no permitidos.');\n}\n\nconst nombre = typeof datos.nombre === 'string'\n  ? datos.nombre.trim()\n  : '';\n\nconst email = typeof datos.email === 'string'\n  ? datos.email.trim().toLowerCase()\n  : '';\n\n// La contraseña se conserva exactamente como fue enviada.\n// No eliminamos espacios ni cambiamos mayúsculas.\nconst password = typeof datos.password === 'string'\n  ? datos.password\n  : '';\n\nif (\n  nombre.length < 2 ||\n  nombre.length > 100 ||\n  /[\\u0000-\\u001f\\u007f]/.test(nombre)\n) {\n  errores.push('El nombre debe tener entre 2 y 100 caracteres válidos.');\n}\n\n// Validación básica de formato; no demuestra que el correo exista.\nif (\n  email.length > 254 ||\n  !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)\n) {\n  errores.push('Introduce una dirección de correo válida.');\n}\n\nconst longitudPassword = Array.from(password).length;\n\nif (longitudPassword < 15 || longitudPassword > 128) {\n  errores.push('La contraseña debe tener entre 15 y 128 caracteres.');\n}\n\nif (errores.length > 0 && statusHttp === 200) {\n  statusHttp = 400;\n}\n\nconst valido = errores.length === 0;\n\nreturn [{\n  json: {\n    valido,\n    errores,\n    status_http: statusHttp,\n\n    // Datos internos para el siguiente paso.\n    // Nunca devolveremos este objeto completo al cliente.\n    datos: valido ? {\n      nombre,\n      email_normalizado: email,\n      password,\n    } : null,\n\n    // Respuesta temporal de esta etapa: no confirma creación.\n    respuesta: valido ? {\n      ok: true,\n      etapa: 'VALIDACION',\n      mensaje: 'Datos válidos. El usuario todavía no se ha creado.',\n    } : {\n      ok: false,\n      error: {\n        codigo: statusHttp === 415\n          ? 'FORMATO_NO_ADMITIDO'\n          : 'DATOS_INVALIDOS',\n        mensaje: 'Revisa la solicitud de registro.',\n        detalles: errores,\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        0
+      ],
+      "id": "e2952455-ad8d-44e6-8b8d-8ba39e6d0f56",
+      "name": "Validar registro de usuario"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.respuesta }}",
+        "options": {
+          "responseCode": "={{ $json.status_http }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        656,
+        64
+      ],
+      "id": "3fc72172-3443-4fba-85c5-7d4d584d5e6f",
+      "name": "Responder validación de registro"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "486fa71d-0cf7-4493-8d01-22ed756f107f",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        288,
+        -32
+      ],
+      "id": "a334397f-9b7c-4ad0-b30b-e3c0eb4f6161",
+      "name": "¿Registro válido?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0",
+          "mode": "list",
+          "cachedResultName": "EP01_Usuarios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Usuarios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "email_normalizado",
+              "lookupValue": "={{ $json.datos.email_normalizado }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        512,
+        -64
+      ],
+      "id": "bfccabca-67d1-42fe-9759-4b452bad6962",
+      "name": "Buscar correo registrado",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const validacion = $('Validar registro de usuario').first().json;\n\nif (validacion.valido !== true || !validacion.datos) {\n  throw new Error('El registro no superó la validación.');\n}\n\nconst coincidencias = $input.all()\n  .map(item => item.json)\n  .filter(fila => Object.keys(fila).length > 0);\n\n// Cualquier coincidencia impide crear otra cuenta.\nif (coincidencias.length > 0) {\n  return [{\n    json: {\n      crear: false,\n      status_http: 409,\n      respuesta: {\n        ok: false,\n        error: {\n          codigo: 'CORREO_NO_DISPONIBLE',\n          mensaje: 'No se puede crear una cuenta con ese correo.',\n        },\n      },\n    },\n  }];\n}\n\nconst crypto = require('crypto');\nconst datos = validacion.datos;\n\nconst salt = crypto.randomBytes(16);\n\nconst parametros = {\n  N: 131072,\n  r: 8,\n  p: 1,\n  maxmem: 256 * 1024 * 1024,\n};\n\nconst hash = crypto.scryptSync(\n  datos.password,\n  salt,\n  64,\n  parametros\n);\n\nconst ahora = new Date().toISOString();\nconst usuarioId = `USR-${crypto.randomBytes(16).toString('hex')}`;\n\n// Guardamos algoritmo y parámetros junto al resultado.\n// El salt se guarda por separado, como exige el proyecto.\nconst passwordHash = [\n  'scrypt',\n  parametros.N,\n  parametros.r,\n  parametros.p,\n  64,\n  hash.toString('hex'),\n].join('$');\n\nconst usuario = {\n  usuario_id: usuarioId,\n  nombre: datos.nombre,\n  email_normalizado: datos.email_normalizado,\n  password_hash: passwordHash,\n  password_salt: salt.toString('hex'),\n  estado: 'ACTIVO',\n  fecha_registro: ahora,\n  fecha_actualizacion: ahora,\n};\n\n// La salida de este nodo ya no incluye la contraseña original.\nreturn [{\n  json: {\n    crear: true,\n    status_http: 201,\n    usuario,\n    auditoria: {\n      auditoria_id: `AUD-USR-CREATE-${$execution.id}`,\n      usuario_id: usuarioId,\n      accion: 'CREATE',\n      fecha: ahora,\n      resultado: 'EXITO',\n      detalle: 'Usuario creado mediante el endpoint de registro.',\n    },\n    respuesta: {\n      ok: true,\n      data: {\n        usuario: {\n          usuario_id: usuarioId,\n          nombre: usuario.nombre,\n          email: usuario.email_normalizado,\n          estado: usuario.estado,\n        },\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        -208
+      ],
+      "id": "5db49eb7-59da-4d1d-9c2a-39cbc7518fe7",
+      "name": "Preparar alta de usuario",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c6d68840-42fd-48d4-ac32-e4beb351d12e",
+              "leftValue": "={{ $json.crear }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        944,
+        -320
+      ],
+      "id": "7102a464-49a6-476c-a5d6-7e017b25fde7",
+      "name": "¿Crear usuario?"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0",
+          "mode": "list",
+          "cachedResultName": "EP01_Usuarios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Usuarios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "usuario_id": "={{ $json.usuario.usuario_id }}",
+            "nombre": "={{ $json.usuario.nombre }}",
+            "email_normalizado": "={{ $json.usuario.email_normalizado }}",
+            "password_hash": "={{ $json.usuario.password_hash }}",
+            "password_salt": "={{ $json.usuario.password_salt }}",
+            "estado": "={{ $json.usuario.estado }}",
+            "fecha_registro": "={{ $json.usuario.fecha_registro }}",
+            "fecha_actualizacion": "={{ $json.usuario.fecha_actualizacion }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_normalizado",
+              "displayName": "email_normalizado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "password_hash",
+              "displayName": "password_hash",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "password_salt",
+              "displayName": "password_salt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_registro",
+              "displayName": "fecha_registro",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_actualizacion",
+              "displayName": "fecha_actualizacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1104,
+        -352
+      ],
+      "id": "a1cb67f1-5f03-4e0f-b4d6-4030f008205c",
+      "name": "Guardar usuario",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0",
+          "mode": "list",
+          "cachedResultName": "EP01_Usuarios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 493589976,
+          "mode": "list",
+          "cachedResultName": "Auditoria_Usuarios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0/edit#gid=493589976"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "auditoria_id": "={{ $('Preparar alta de usuario').first().json.auditoria.auditoria_id }}",
+            "usuario_id": "={{ $('Preparar alta de usuario').first().json.auditoria.usuario_id }}",
+            "accion": "={{ $('Preparar alta de usuario').first().json.auditoria.accion }}",
+            "fecha": "={{ $('Preparar alta de usuario').first().json.auditoria.fecha }}",
+            "resultado": "={{ $('Preparar alta de usuario').first().json.auditoria.resultado }}",
+            "detalle": "={{ $('Preparar alta de usuario').first().json.auditoria.detalle }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "auditoria_id",
+              "displayName": "auditoria_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "accion",
+              "displayName": "accion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resultado",
+              "displayName": "resultado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1328,
+        -336
+      ],
+      "id": "d427be16-4c7c-480a-a948-3955e9ca1855",
+      "name": "Registrar auditoría de usuario",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $('Preparar alta de usuario').first().json.respuesta }}",
+        "options": {
+          "responseCode": "={{ $('Preparar alta de usuario').first().json.status_http }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1616,
+        -96
+      ],
+      "id": "600aa682-7ebb-4637-b642-2be47773ca08",
+      "name": "Responder registro"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": false,\n  \"error\": {\n    \"codigo\": \"REGISTRO_NO_COMPLETADO\",\n    \"mensaje\": \"No se pudo completar la operación de registro.\"\n  }\n}",
+        "options": {
+          "responseCode": 503,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1152,
+        16
+      ],
+      "id": "60a06d04-30f7-4eb4-91a1-94fc8df8f8cb",
+      "name": "Responder error de registro"
+    },
+    {
+      "parameters": {
+        "path": "eventpass/usuarios/me",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -80,
+        336
+      ],
+      "id": "dda82a7c-42dd-4e0f-b77b-21721c276a62",
+      "name": "Webhook - Consultar mi perfil",
+      "webhookId": "94460436-68d0-4a6f-9891-1fb17cf66b73"
+    },
+    {
+      "parameters": {
+        "jsCode": "const solicitud = $input.first().json;\n\n// Enviamos al subworkflow únicamente el encabezado necesario.\n// No aceptamos un usuario_id del cliente para elegir el perfil.\nreturn [{\n  json: {\n    headers: {\n      authorization:\n        typeof solicitud.headers?.authorization === 'string'\n          ? solicitud.headers.authorization\n          : '',\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        336
+      ],
+      "id": "8a6c9ef0-4bd5-412e-9c46-6b0523824c4f",
+      "name": "Preparar autenticación de perfil"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "UwOk41MQnPHz9dxs",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/UwOk41MQnPHz9dxs",
+          "cachedResultName": "SW_validar_sesion"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        368,
+        336
+      ],
+      "id": "19c56fb1-bbb7-4272-8924-f46108f27476",
+      "name": "Autenticar consulta de perfil",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const validacion = $input.first().json;\n\nif (![200, 401, 503].includes(validacion.status_http)) {\n  throw new Error('La autenticación devolvió un resultado inesperado.');\n}\n\nif (validacion.status_http !== 200) {\n  return [{\n    json: {\n      status_http: validacion.status_http,\n      respuesta: validacion.respuesta,\n    },\n  }];\n}\n\nconst usuario = validacion.respuesta?.data?.usuario;\n\nif (\n  validacion.respuesta?.ok !== true ||\n  !usuario?.usuario_id\n) {\n  throw new Error('La autenticación no devolvió un usuario válido.');\n}\n\n// El subworkflow ya consultó al usuario y comprobó que está activo.\nreturn [{\n  json: {\n    status_http: 200,\n    respuesta: {\n      ok: true,\n      data: {\n        usuario: {\n          usuario_id: usuario.usuario_id,\n          nombre: usuario.nombre,\n          email: usuario.email,\n          estado: 'ACTIVO',\n        },\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        256
+      ],
+      "id": "406843c7-adaf-4cad-afdd-0a60eb23b19e",
+      "name": "Preparar respuesta de perfil",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.respuesta }}",
+        "options": {
+          "responseCode": "={{ $json.status_http }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        880,
+        192
+      ],
+      "id": "f6b7fdcb-ac88-44fe-828e-b7e72791bebf",
+      "name": "Responder perfil"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": false,\n  \"error\": {\n    \"codigo\": \"PERFIL_NO_DISPONIBLE\",\n    \"mensaje\": \"No fue posible consultar el perfil.\"\n  }\n}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1040,
+        496
+      ],
+      "id": "6d82d05e-f5ea-4e23-9b21-927c4a49f9a2",
+      "name": "Responder error de perfil"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Registrar usuario": {
+      "main": [
+        [
+          {
+            "node": "Validar registro de usuario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar registro de usuario": {
+      "main": [
+        [
+          {
+            "node": "¿Registro válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Registro válido?": {
+      "main": [
+        [
+          {
+            "node": "Buscar correo registrado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder validación de registro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar correo registrado": {
+      "main": [
+        [
+          {
+            "node": "Preparar alta de usuario",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de registro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar alta de usuario": {
+      "main": [
+        [
+          {
+            "node": "¿Crear usuario?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de registro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Crear usuario?": {
+      "main": [
+        [
+          {
+            "node": "Guardar usuario",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder registro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar usuario": {
+      "main": [
+        [
+          {
+            "node": "Registrar auditoría de usuario",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de registro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar auditoría de usuario": {
+      "main": [
+        [
+          {
+            "node": "Responder registro",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de registro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Consultar mi perfil": {
+      "main": [
+        [
+          {
+            "node": "Preparar autenticación de perfil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar autenticación de perfil": {
+      "main": [
+        [
+          {
+            "node": "Autenticar consulta de perfil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Autenticar consulta de perfil": {
+      "main": [
+        [
+          {
+            "node": "Preparar respuesta de perfil",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de perfil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar respuesta de perfil": {
+      "main": [
+        [
+          {
+            "node": "Responder perfil",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de perfil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "03905a34-5ed5-4199-a541-b34294c96e39",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+  },
+  "nodeGroups": [],
+  "id": "aIOhtIsQVWJe1ImL",
+  "tags": []
+}

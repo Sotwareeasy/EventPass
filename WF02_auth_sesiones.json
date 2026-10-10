@@ -1,0 +1,544 @@
+{
+  "name": "WF02_auth_sesiones",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eventpass/auth/login",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "b141e7e7-03ff-41c5-a386-8dee516b191e",
+      "name": "Webhook - Login",
+      "webhookId": "ae67150c-a01f-4f56-ae8b-9ac201dbfcd4"
+    },
+    {
+      "parameters": {
+        "jsCode": "const solicitud = $input.first().json;\nconst cuerpo = solicitud.body;\n\nconst contentType = String(\n  solicitud.headers?.['content-type'] ?? ''\n).split(';')[0].trim().toLowerCase();\n\nconst errores = [];\n\nconst esObjeto =\n  cuerpo !== null &&\n  typeof cuerpo === 'object' &&\n  !Array.isArray(cuerpo);\n\nconst datos = esObjeto ? cuerpo : {};\n\nif (!esObjeto) {\n  errores.push('El cuerpo debe ser un objeto JSON.');\n}\n\nif (Object.keys(datos).some(campo => !['email', 'password'].includes(campo))) {\n  errores.push('La solicitud contiene campos no permitidos.');\n}\n\nconst email = typeof datos.email === 'string'\n  ? datos.email.trim().toLowerCase()\n  : '';\n\nconst password = typeof datos.password === 'string'\n  ? datos.password\n  : '';\n\nif (\n  email.length > 254 ||\n  !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)\n) {\n  errores.push('Introduce una dirección de correo válida.');\n}\n\n// En login comprobamos que exista y tenga una longitud limitada.\n// La coincidencia con la contraseña registrada se comprueba después.\nconst longitud = Array.from(password).length;\n\nif (longitud === 0 || longitud > 128) {\n  errores.push('Introduce una contraseña de hasta 128 caracteres.');\n}\n\nlet statusHttp = errores.length > 0 ? 400 : 200;\n\nif (contentType !== 'application/json') {\n  statusHttp = 415;\n  errores.push('Envía el cuerpo con Content-Type application/json.');\n}\n\nreturn [{\n  json: {\n    valido: errores.length === 0,\n    status_http: statusHttp,\n    datos: errores.length === 0 ? {\n      email_normalizado: email,\n      password,\n    } : null,\n    respuesta: {\n      ok: false,\n      error: {\n        codigo: statusHttp === 415\n          ? 'FORMATO_NO_ADMITIDO'\n          : 'DATOS_INVALIDOS',\n        mensaje: 'Revisa la solicitud de inicio de sesión.',\n        detalles: errores,\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "2bdeb061-ded1-419d-91db-7d8015b8434e",
+      "name": "Validar entrada de login"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8039d19d-a622-47d3-b0f4-6200b65a0074",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        0
+      ],
+      "id": "0e25167f-745f-4bba-9490-a5bfabb6b0dc",
+      "name": "¿Entrada de login válida?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.respuesta }}",
+        "options": {
+          "responseCode": "={{ $json.status_http }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        672,
+        96
+      ],
+      "id": "341e3d25-7a63-4606-a8b7-9eb8729166df",
+      "name": "Responder entrada inválida de login"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0",
+          "mode": "list",
+          "cachedResultName": "EP01_Usuarios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Usuarios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "email_normalizado",
+              "lookupValue": "={{ $json.datos.email_normalizado }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        -96
+      ],
+      "id": "8131be8b-6c95-4d42-8375-853e55d3f42b",
+      "name": "Buscar usuario para login",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst entrada = $('Validar entrada de login').first().json;\n\nif (entrada.valido !== true || !entrada.datos) {\n  throw new Error('La entrada del login no superó la validación.');\n}\n\nconst filas = $input.all()\n  .map(item => item.json)\n  .filter(fila => Object.keys(fila).length > 0);\n\nif (filas.length > 1) {\n  throw new Error('Hay varios usuarios con el mismo correo.');\n}\n\nconst usuario = filas[0] ?? null;\n\nconst parametros = {\n  N: 131072,\n  r: 8,\n  p: 1,\n  maxmem: 256 * 1024 * 1024,\n};\n\n// También hacemos un cálculo cuando el correo no existe.\n// Evitamos que esa ruta omita por completo el trabajo criptográfico.\nlet salt = crypto.randomBytes(16);\nlet hashEsperado = crypto.randomBytes(64);\n\nif (usuario) {\n  if (\n    !usuario.usuario_id ||\n    usuario.email_normalizado !== entrada.datos.email_normalizado\n  ) {\n    throw new Error('El registro de usuario es inconsistente.');\n  }\n\n  // Admitimos exactamente el formato que genera WF01.\n  // No ejecutamos parámetros arbitrarios tomados de Sheets.\n  const partes = String(usuario.password_hash ?? '').split('$');\n\n  const formatoValido =\n    partes.length === 6 &&\n    partes[0] === 'scrypt' &&\n    partes[1] === '131072' &&\n    partes[2] === '8' &&\n    partes[3] === '1' &&\n    partes[4] === '64' &&\n    /^[a-f0-9]{128}$/i.test(partes[5]) &&\n    /^[a-f0-9]{32}$/i.test(String(usuario.password_salt ?? ''));\n\n  if (!formatoValido) {\n    throw new Error('El registro tiene un formato de contraseña inválido.');\n  }\n\n  salt = Buffer.from(usuario.password_salt, 'hex');\n  hashEsperado = Buffer.from(partes[5], 'hex');\n}\n\nconst hashCalculado = crypto.scryptSync(\n  entrada.datos.password,\n  salt,\n  64,\n  parametros\n);\n\nconst coincide = crypto.timingSafeEqual(hashCalculado, hashEsperado);\n\nconst autorizado =\n  usuario !== null &&\n  coincide &&\n  usuario.estado === 'ACTIVO';\n\n// No devolvemos la contraseña ni los hashes.\nreturn [{\n  json: {\n    autorizado,\n    status_http: autorizado ? 200 : 401,\n    usuario: autorizado ? {\n      usuario_id: usuario.usuario_id,\n      nombre: usuario.nombre,\n      email: usuario.email_normalizado,\n    } : null,\n    respuesta: autorizado ? {\n      ok: true,\n      etapa: 'CREDENCIALES_VERIFICADAS',\n      mensaje: 'Credenciales correctas. Todavía no se ha creado una sesión.',\n    } : {\n      ok: false,\n      error: {\n        codigo: 'CREDENCIALES_INVALIDAS',\n        mensaje: 'No fue posible iniciar sesión con esas credenciales.',\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -192
+      ],
+      "id": "3c83c5f6-7690-4093-994d-1d7184bed2eb",
+      "name": "Verificar credenciales",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"error\": {\n    \"codigo\": \"LOGIN_NO_DISPONIBLE\",\n    \"mensaje\": \"No fue posible procesar el inicio de sesión.\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1472,
+        176
+      ],
+      "id": "47e578a8-7485-4c11-a4cd-ffdf5825f99e",
+      "name": "Responder error de login"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7bb57d13-3d91-4802-9219-24f914aef1bb",
+              "leftValue": "={{ $json.autorizado }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1120,
+        -224
+      ],
+      "id": "aaf37d27-cb2d-45d6-acee-3e78eef57f40",
+      "name": "¿Login autorizado?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.respuesta }}",
+        "options": {
+          "responseCode": "={{ $json.status_http }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1280,
+        -464
+      ],
+      "id": "f53d9ce0-b947-40b2-976e-913399bcd30b",
+      "name": "Responder credenciales inválidas"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst entrada = $input.first().json;\n\nif (entrada.autorizado !== true || !entrada.usuario?.usuario_id) {\n  throw new Error('No se puede crear una sesión sin autenticar al usuario.');\n}\n\nconst ahora = new Date();\nconst expiracion = new Date(ahora.getTime() + 8 * 60 * 60 * 1000);\n\n// Token de 256 bits generado con aleatoriedad criptográfica.\nconst token = `ep_${crypto.randomBytes(32).toString('base64url')}`;\n\n// Sheets almacenará esta huella, no el token utilizable.\nconst tokenHash = crypto\n  .createHash('sha256')\n  .update(token, 'utf8')\n  .digest('hex');\n\nconst sessionId = `SES-${crypto.randomBytes(16).toString('hex')}`;\n\nreturn [{\n  json: {\n    sesion: {\n      session_id: sessionId,\n      usuario_id: entrada.usuario.usuario_id,\n      session_token: `sha256:${tokenHash}`,\n      creada_en: ahora.toISOString(),\n      expira_en: expiracion.toISOString(),\n      estado: 'ACTIVA',\n      cerrada_en: '',\n      ultima_validacion: ahora.toISOString(),\n    },\n\n    // Se enviará únicamente después de guardar la sesión.\n    respuesta: {\n      ok: true,\n      data: {\n        usuario: entrada.usuario,\n        sesion: {\n          session_id: sessionId,\n          token,\n          token_type: 'Bearer',\n          expira_en: expiracion.toISOString(),\n        },\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        -304
+      ],
+      "id": "7d54e574-8404-468d-8b5c-d483cb701c07",
+      "name": "Preparar sesión",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1nRY-I6R6rbzAv-fo75wqL44tjNVykq3KVdOc1RdRVtY",
+          "mode": "list",
+          "cachedResultName": "EP02_Sesiones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1nRY-I6R6rbzAv-fo75wqL44tjNVykq3KVdOc1RdRVtY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sesiones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1nRY-I6R6rbzAv-fo75wqL44tjNVykq3KVdOc1RdRVtY/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "session_id": "={{ $json.sesion.session_id }}",
+            "usuario_id": "={{ $json.sesion.usuario_id }}",
+            "session_token": "={{ $json.sesion.session_token }}",
+            "creada_en": "={{ $json.sesion.creada_en }}",
+            "expira_en": "={{ $json.sesion.expira_en }}",
+            "estado": "={{ $json.sesion.estado }}",
+            "cerrada_en": "={{ $json.sesion.cerrada_en }}",
+            "ultima_validacion": "={{ $json.sesion.ultima_validacion }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "session_id",
+              "displayName": "session_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "session_token",
+              "displayName": "session_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "creada_en",
+              "displayName": "creada_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "expira_en",
+              "displayName": "expira_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cerrada_en",
+              "displayName": "cerrada_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ultima_validacion",
+              "displayName": "ultima_validacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1616,
+        -192
+      ],
+      "id": "4d7f5e81-810c-44c9-8a7e-de833d11310e",
+      "name": "Guardar sesión",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $('Preparar sesión').first().json.respuesta }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1840,
+        -288
+      ],
+      "id": "31fd170d-0ad9-402b-8d4c-be1b54cbc6eb",
+      "name": "Responder login exitoso"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Login": {
+      "main": [
+        [
+          {
+            "node": "Validar entrada de login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar entrada de login": {
+      "main": [
+        [
+          {
+            "node": "¿Entrada de login válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Entrada de login válida?": {
+      "main": [
+        [
+          {
+            "node": "Buscar usuario para login",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder entrada inválida de login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar usuario para login": {
+      "main": [
+        [
+          {
+            "node": "Verificar credenciales",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar credenciales": {
+      "main": [
+        [
+          {
+            "node": "¿Login autorizado?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Login autorizado?": {
+      "main": [
+        [
+          {
+            "node": "Preparar sesión",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder credenciales inválidas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar sesión": {
+      "main": [
+        [
+          {
+            "node": "Guardar sesión",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar sesión": {
+      "main": [
+        [
+          {
+            "node": "Responder login exitoso",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "e76c62d8-0cae-45dd-830b-2656e3f8eca6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+  },
+  "nodeGroups": [],
+  "id": "8LhTUVTMu6Ycm4jK",
+  "tags": []
+}
