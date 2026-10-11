@@ -1,0 +1,111 @@
+{
+  "name": "TEST_Concurrencia_EventPass",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "eventpass/diagnostico/concurrencia",
+        "authentication": "basicAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f0a7658b-73aa-45d4-927f-5e9c26c6b323",
+      "name": "Webhook - Prueba concurrencia",
+      "webhookId": "0c318dec-22a2-4108-a435-04f207af2a53",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "FHeNZzNlpU5BzRzU",
+          "name": "EventPass - Administrador formularios"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const inicio = Date.now();\n\n// Mantiene esta ejecución en curso durante ocho segundos.\n// Es únicamente una herramienta de diagnóstico.\nawait new Promise(resolve => setTimeout(resolve, 8000));\n\nconst fin = Date.now();\n\nreturn [{\n  json: {\n    ok: true,\n    ejecucion_id: String($execution.id),\n    inicio_ms: inicio,\n    fin_ms: fin,\n    duracion_ms: fin - inicio,\n    inicio: new Date(inicio).toISOString(),\n    fin: new Date(fin).toISOString(),\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "32044ac0-faf4-42d4-ae99-e176960a9cef",
+      "name": "Medir intervalo de ejecución"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "bba4342e-1b44-4fa3-9f6d-e34a3f02f4cb",
+      "name": "Responder prueba concurrencia"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Prueba concurrencia": {
+      "main": [
+        [
+          {
+            "node": "Medir intervalo de ejecución",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Medir intervalo de ejecución": {
+      "main": [
+        [
+          {
+            "node": "Responder prueba concurrencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "b7c8f88b-d653-4260-9f54-7514fa4f3c38",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+  },
+  "nodeGroups": [],
+  "id": "VYNCPyQoeeYaCqqQ",
+  "tags": []
+}

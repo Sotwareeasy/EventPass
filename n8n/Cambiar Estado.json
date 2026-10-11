@@ -1,5 +1,11 @@
 {
+  "updatedAt": "2026-10-11T14:07:38.977Z",
+  "createdAt": "2026-10-08T21:33:58.016Z",
+  "id": "JgQL3homYC2przL2",
   "name": "Cambiar Estado",
+  "description": null,
+  "active": true,
+  "isArchived": false,
   "nodes": [
     {
       "parameters": {
@@ -540,9 +546,50 @@
       "id": "a1972903-c590-48cc-bb41-df190026a40e",
       "name": "Formulario - Estado actualizado",
       "webhookId": "68c9ac4e-1694-4acc-aa87-389961d4dd7c"
+    },
+    {
+      "id": "46d23ba9-4568-4bcf-93af-f325c3c3b318",
+      "name": "AV · Cambio de evento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        280
+      ],
+      "parameters": {
+        "jsCode": "const x=$('Preparar cambio de estado').first().json;const e=x;return [{json:{evento_id:e.evento_id,clave_idempotencia:x.auditoria.auditoria_id,mensaje:'El evento '+e.evento_id+' cambió al estado '+e.estado+'. Consulta EventPass para más información.'}}];"
+      }
+    },
+    {
+      "id": "48b631ac-3329-43e4-b82c-9f5cae59c781",
+      "name": "AV · Cambio de evento enviar",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        560
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "EPEventoAvisos",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "passThrough",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "onError": "continueRegularOutput"
     }
   ],
-  "pinData": {},
   "connections": {
     "Formulario - Cambiar estado": {
       "main": [
@@ -642,22 +689,66 @@
             "node": "Formulario - Estado actualizado",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "AV · Cambio de evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AV · Cambio de evento": {
+      "main": [
+        [
+          {
+            "node": "AV · Cambio de evento enviar",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "c7f3f9cd-83b3-4512-8881-e6a60539d8dd",
+  "staticData": null,
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
   },
   "nodeGroups": [],
-  "id": "JgQL3homYC2przL2",
-  "tags": []
+  "pinData": {},
+  "versionId": "de5cc0b4-55fc-4abb-a592-dfc4a92f50ac",
+  "activeVersionId": "de5cc0b4-55fc-4abb-a592-dfc4a92f50ac",
+  "versionCounter": 93,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-10-08T21:33:58.016Z",
+      "createdAt": "2026-10-08T21:33:58.016Z",
+      "role": "workflow:owner",
+      "workflowId": "JgQL3homYC2przL2",
+      "projectId": "Io2OgvxqX2dWHxpm",
+      "project": {
+        "updatedAt": "2026-09-24T01:24:55.210Z",
+        "createdAt": "2026-09-23T02:09:17.501Z",
+        "id": "Io2OgvxqX2dWHxpm",
+        "name": "Fabian Enrique Uribe Rodriguez <computo.forencics795@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "e48cb428-b9d8-43e1-bbf7-b44932bdd1cb"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
 }

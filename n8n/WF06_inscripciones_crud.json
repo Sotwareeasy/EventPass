@@ -1,0 +1,3786 @@
+{
+  "updatedAt": "2026-10-11T14:07:21.477Z",
+  "createdAt": "2026-10-10T13:07:31.505Z",
+  "id": "YaDPteajrJaHPH62",
+  "name": "WF06_inscripciones_crud",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eventpass/inscripciones",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "c0e8998a-9fe3-4146-a541-abac5a240d92",
+      "name": "Webhook - Crear inscripción",
+      "webhookId": "70d60d60-f44f-46b8-ab3d-10815786d548"
+    },
+    {
+      "parameters": {
+        "jsCode": "const solicitud = $input.first().json;\n\nreturn [{\n  json: {\n    headers: {\n      authorization:\n        typeof solicitud.headers?.authorization === 'string'\n          ? solicitud.headers.authorization\n          : '',\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "123ce6b5-9974-4908-89b0-202645f8afe5",
+      "name": "Preparar autenticación de inscripción"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "UwOk41MQnPHz9dxs",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/UwOk41MQnPHz9dxs",
+          "cachedResultName": "SW_validar_sesion"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        448,
+        0
+      ],
+      "id": "c2e5aff3-87f7-400e-a876-c6989c727a5e",
+      "name": "Autenticar inscripción",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const autenticacion = $input.first().json;\n\nif (![200, 401, 503].includes(autenticacion.status_http)) {\n  throw new Error('Respuesta de autenticación inesperada.');\n}\n\nif (autenticacion.status_http !== 200) {\n  return [{\n    json: {\n      continuar: false,\n      status_http: autenticacion.status_http,\n      respuesta: autenticacion.respuesta,\n    },\n  }];\n}\n\nconst usuario = autenticacion.respuesta?.data?.usuario;\n\nif (\n  autenticacion.respuesta?.ok !== true ||\n  typeof usuario?.usuario_id !== 'string' ||\n  !usuario.usuario_id.trim()\n) {\n  throw new Error('No se recibió un usuario autenticado válido.');\n}\n\nconst solicitud =\n  $('Webhook - Crear inscripción').first().json;\n\nconst contentType = String(\n  solicitud.headers?.['content-type'] ?? ''\n)\n  .split(';')[0]\n  .trim()\n  .toLowerCase();\n\nfunction rechazar(status, mensaje) {\n  return [{\n    json: {\n      continuar: false,\n      status_http: status,\n      respuesta: {\n        ok: false,\n        error: {\n          codigo: 'SOLICITUD_INSCRIPCION_INVALIDA',\n          mensaje,\n        },\n      },\n    },\n  }];\n}\n\nif (contentType !== 'application/json') {\n  return rechazar(415, 'Envía los datos como application/json.');\n}\n\nconst cuerpo = solicitud.body;\n\nif (\n  cuerpo === null ||\n  typeof cuerpo !== 'object' ||\n  Array.isArray(cuerpo)\n) {\n  return rechazar(400, 'El cuerpo debe ser un objeto JSON.');\n}\n\nconst permitidos = [\n  'evento_id',\n  'nombre_acreditacion',\n  'observaciones',\n];\n\nif (Object.keys(cuerpo).some(campo => !permitidos.includes(campo))) {\n  return rechazar(400, 'La solicitud contiene campos no permitidos.');\n}\n\nif (\n  typeof cuerpo.evento_id !== 'string' ||\n  typeof cuerpo.nombre_acreditacion !== 'string' ||\n  (\n    cuerpo.observaciones !== undefined &&\n    typeof cuerpo.observaciones !== 'string'\n  )\n) {\n  return rechazar(400, 'Los campos deben contener texto.');\n}\n\nconst eventoId = cuerpo.evento_id.trim();\nconst nombre = cuerpo.nombre_acreditacion.trim();\nconst observaciones = (cuerpo.observaciones ?? '').trim();\n\nif (!/^EVT-[A-Za-z0-9_-]{1,76}$/.test(eventoId)) {\n  return rechazar(400, 'El identificador del evento no es válido.');\n}\n\nconst caracteresControl = /[\\u0000-\\u001F\\u007F]/;\n\nif (\n  [...nombre].length < 2 ||\n  [...nombre].length > 100 ||\n  caracteresControl.test(nombre)\n) {\n  return rechazar(\n    400,\n    'El nombre de acreditación debe tener entre 2 y 100 caracteres y no contener caracteres de control.'\n  );\n}\n\nif (\n  [...observaciones].length > 500 ||\n  caracteresControl.test(observaciones)\n) {\n  return rechazar(\n    400,\n    'Las observaciones deben tener como máximo 500 caracteres y escribirse en una sola línea.'\n  );\n}\n\nreturn [{\n  json: {\n    continuar: true,\n    datos: {\n      usuario_id: usuario.usuario_id,\n      evento_id: eventoId,\n      nombre_acreditacion: nombre,\n      observaciones,\n      origen: 'WEB',\n    },\n\n    // Respuesta temporal para probar únicamente esta etapa.\n    status_http: 200,\n    respuesta: {\n      ok: true,\n      mensaje: 'Solicitud validada. Todavía no se ha creado una inscripción.',\n      data: {\n        evento_id: eventoId,\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -32
+      ],
+      "id": "f539fd50-8e9a-44c8-a2fc-2627b544d174",
+      "name": "Validar solicitud de inscripción",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.respuesta }}",
+        "options": {
+          "responseCode": "={{ $json.status_http }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        3120,
+        240
+      ],
+      "id": "6ab19b47-042b-442a-bc7b-6bc8892ff202",
+      "name": "Responder validación inicial de inscripción"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": false,\n  \"error\": {\n    \"codigo\": \"INSCRIPCION_NO_DISPONIBLE\",\n    \"mensaje\": \"No fue posible procesar la solicitud de inscripción.\"\n  }\n}",
+        "options": {
+          "responseCode": 503
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1712,
+        176
+      ],
+      "id": "18e06c86-c17d-4e53-8e95-0e9f3494646d",
+      "name": "Responder error de inscripción"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "75c592f7-076b-421c-8750-129ae75c1528",
+              "leftValue": "={{ $json.continuar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        -112
+      ],
+      "id": "8b99e37c-7e4b-4332-b9de-038199fe3914",
+      "name": "¿Solicitud de inscripción válida?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo",
+          "mode": "list",
+          "cachedResultName": "EP03_Telegram",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 882727568,
+          "mode": "list",
+          "cachedResultName": "Vinculaciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1w_PXGLr22sfelUiC7vP0LxlXBOfgycYoSjSP_mK-PAo/edit#gid=882727568"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "usuario_id",
+              "lookupValue": "={{ $json.datos.usuario_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1040,
+        -240
+      ],
+      "id": "9b2aceaf-8605-490b-9f6b-b29516794871",
+      "name": "Buscar Telegram para inscripción",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const solicitud =\n  $('Validar solicitud de inscripción').first().json;\n\nif (\n  solicitud.continuar !== true ||\n  typeof solicitud.datos?.usuario_id !== 'string' ||\n  !solicitud.datos.usuario_id\n) {\n  throw new Error('No se recibió una solicitud autenticada válida.');\n}\n\nconst filas = $input.all()\n  .map(item => item.json)\n  .filter(fila => Object.keys(fila).length > 0);\n\nconst identificadores = new Set();\n\nfor (const fila of filas) {\n  if (\n    fila.usuario_id !== solicitud.datos.usuario_id ||\n    typeof fila.vinculacion_id !== 'string' ||\n    !fila.vinculacion_id.trim() ||\n    !['ACTIVA', 'INACTIVA'].includes(fila.estado)\n  ) {\n    throw new Error('La vinculación contiene datos inconsistentes.');\n  }\n\n  if (identificadores.has(fila.vinculacion_id)) {\n    throw new Error('Hay identificadores de vinculación duplicados.');\n  }\n\n  identificadores.add(fila.vinculacion_id);\n}\n\nconst activas = filas.filter(fila => fila.estado === 'ACTIVA');\n\nif (activas.length > 1) {\n  throw new Error('El usuario tiene varias vinculaciones activas.');\n}\n\nif (activas.length === 0) {\n  return [{\n    json: {\n      continuar: false,\n      status_http: 403,\n      respuesta: {\n        ok: false,\n        error: {\n          codigo: 'TELEGRAM_REQUERIDO',\n          mensaje:\n            'Vincula tu cuenta de Telegram antes de inscribirte en un evento.',\n        },\n      },\n    },\n  }];\n}\n\nconst vinculacion = activas[0];\nconst chatId = String(vinculacion.chat_id ?? '').trim();\n\nif (\n  !/^[1-9]\\d*$/.test(chatId) ||\n  !Number.isFinite(Date.parse(vinculacion.fecha_vinculacion))\n) {\n  throw new Error('La vinculación activa está incompleta.');\n}\n\nreturn [{\n  json: {\n    continuar: true,\n    datos: solicitud.datos,\n\n    // Datos internos para los siguientes pasos.\n    telegram: {\n      vinculacion_id: vinculacion.vinculacion_id,\n      chat_id: chatId,\n    },\n\n    // Respuesta temporal; todavía no consultamos el evento.\n    status_http: 200,\n    respuesta: {\n      ok: true,\n      mensaje:\n        'Solicitud y Telegram validados. Todavía no se ha creado una inscripción.',\n      data: {\n        evento_id: solicitud.datos.evento_id,\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        -144
+      ],
+      "id": "df06a631-0e4c-457f-91e8-248676363c18",
+      "name": "Validar Telegram para inscripción",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0ed865c7-3567-4cb5-b6eb-8e1b2b4ebcdd",
+              "leftValue": "={{ $json.continuar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1648,
+        -160
+      ],
+      "id": "2228d374-0982-46d6-a5c7-2632848352f7",
+      "name": "¿Telegram válido para inscripción?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1dMO2t9hHFzOJ5ItqBs7uvoTxXTGcndUTGJ9qOuNgqrM",
+          "mode": "list",
+          "cachedResultName": "EP04_Eventos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1dMO2t9hHFzOJ5ItqBs7uvoTxXTGcndUTGJ9qOuNgqrM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Eventos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1dMO2t9hHFzOJ5ItqBs7uvoTxXTGcndUTGJ9qOuNgqrM/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "evento_id",
+              "lookupValue": "={{ $json.datos.evento_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1872,
+        -192
+      ],
+      "id": "3c68009a-bdf0-4e65-ac57-f33073d663ed",
+      "name": "Buscar evento para inscripción",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const contexto = $('Validar Telegram para inscripción').first().json;\n\nif (\n  contexto.continuar !== true ||\n  !contexto.datos?.usuario_id ||\n  !contexto.datos?.evento_id ||\n  !contexto.telegram?.vinculacion_id\n) {\n  throw new Error('Contexto de inscripción incompleto.');\n}\n\nfunction rechazar(status, codigo, mensaje) {\n  return [{\n    json: {\n      continuar: false,\n      status_http: status,\n      respuesta: {\n        ok: false,\n        error: { codigo, mensaje },\n      },\n    },\n  }];\n}\n\nconst filas = $input.all()\n  .map(item => item.json)\n  .filter(fila => fila && Object.keys(fila).length > 0);\n\nif (filas.length === 0) {\n  return rechazar(\n    404,\n    'EVENTO_NO_ENCONTRADO',\n    'No se encontró el evento solicitado.'\n  );\n}\n\nif (filas.length !== 1) {\n  throw new Error('Se encontraron registros duplicados del evento.');\n}\n\nconst evento = filas[0];\nconst eventoId = String(evento.evento_id ?? '').trim();\n\nif (eventoId !== contexto.datos.evento_id) {\n  throw new Error('La consulta devolvió un evento diferente.');\n}\n\nconst estado = String(evento.estado ?? '').trim();\nconst estadosValidos = [\n  'BORRADOR',\n  'PUBLICADO',\n  'CERRADO',\n  'CANCELADO',\n];\n\nif (!estadosValidos.includes(estado)) {\n  throw new Error('El evento contiene un estado inválido.');\n}\n\nif (estado !== 'PUBLICADO') {\n  return rechazar(\n    409,\n    'EVENTO_NO_DISPONIBLE',\n    'El evento no está disponible para inscripciones.'\n  );\n}\n\nconst fecha = String(evento.fecha ?? '').trim();\nconst hora = String(evento.hora ?? '').trim();\n\nif (\n  !/^\\d{4}-\\d{2}-\\d{2}$/.test(fecha) ||\n  !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(hora)\n) {\n  throw new Error('La fecha o la hora del evento tiene un formato inválido.');\n}\n\nconst [anio, mes, dia] = fecha.split('-').map(Number);\nconst comprobacion = new Date(`${fecha}T00:00:00Z`);\n\nif (\n  !Number.isFinite(comprobacion.getTime()) ||\n  comprobacion.getUTCFullYear() !== anio ||\n  comprobacion.getUTCMonth() + 1 !== mes ||\n  comprobacion.getUTCDate() !== dia\n) {\n  throw new Error('La fecha del evento no existe en el calendario.');\n}\n\n// Las fechas y horas de los eventos corresponden a Colombia.\nconst inicioMs = Date.parse(`${fecha}T${hora}:00-05:00`);\n\nif (!Number.isFinite(inicioMs)) {\n  throw new Error('No fue posible interpretar el inicio del evento.');\n}\n\nif (inicioMs <= Date.now()) {\n  return rechazar(\n    409,\n    'EVENTO_NO_DISPONIBLE',\n    'El evento ya comenzó o su fecha ya pasó.'\n  );\n}\n\nconst capacidadTexto = String(evento.capacidad ?? '').trim();\n\nif (!/^\\d+$/.test(capacidadTexto)) {\n  throw new Error('La capacidad del evento tiene un formato inválido.');\n}\n\nconst capacidad = Number(capacidadTexto);\n\nif (!Number.isSafeInteger(capacidad) || capacidad < 1) {\n  throw new Error('La capacidad del evento debe ser un entero positivo.');\n}\n\nreturn [{\n  json: {\n    continuar: true,\n    datos: contexto.datos,\n    telegram: contexto.telegram,\n    evento: {\n      evento_id: eventoId,\n      nombre: String(evento.nombre ?? '').trim(),\n      fecha,\n      hora,\n      estado,\n      capacidad,\n      inicio_ms: inicioMs,\n    },\n    status_http: 200,\n    respuesta: {\n      ok: true,\n      mensaje:\n        'Solicitud, Telegram y evento validados. Todavía no se ha creado una inscripción.',\n      data: {\n        evento_id: eventoId,\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2096,
+        -192
+      ],
+      "id": "85a73b16-5629-4d1c-9d4c-2a71fe7f9f0e",
+      "name": "Validar evento para inscripción",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4921cf69-a826-433c-92b6-a60c7628c7fe",
+              "leftValue": "={{ $json.continuar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2352,
+        -192
+      ],
+      "id": "7d5062fa-43bc-44ce-a9a2-2f64b497196f",
+      "name": "¿Evento válido para inscripción?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "list",
+          "cachedResultName": "EP06_Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2576,
+        -288
+      ],
+      "id": "ec4b503c-aa28-4e88-8709-b082d2e6a8d5",
+      "name": "Leer inscripciones para disponibilidad",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const contexto = $('Validar evento para inscripción').first().json;\n\nif (\n  contexto.continuar !== true ||\n  !contexto.datos?.usuario_id ||\n  !contexto.datos?.evento_id ||\n  contexto.evento?.evento_id !== contexto.datos.evento_id\n) {\n  throw new Error('Contexto inválido para consultar disponibilidad.');\n}\n\nconst capacidad = contexto.evento.capacidad;\n\nif (!Number.isSafeInteger(capacidad) || capacidad < 1) {\n  throw new Error('La capacidad del evento es inválida.');\n}\n\nfunction rechazar(status, codigo, mensaje) {\n  return [{\n    json: {\n      continuar: false,\n      status_http: status,\n      respuesta: {\n        ok: false,\n        error: { codigo, mensaje },\n      },\n    },\n  }];\n}\n\n// La lectura puede tardar: comprobamos otra vez el inicio del evento.\nif (\n  !Number.isFinite(contexto.evento.inicio_ms) ||\n  contexto.evento.inicio_ms <= Date.now()\n) {\n  return rechazar(\n    409,\n    'EVENTO_NO_DISPONIBLE',\n    'El evento ya comenzó o su fecha ya pasó.'\n  );\n}\n\nconst filas = $input.all()\n  .map(item => item.json)\n  .filter(fila => fila && Object.keys(fila).length > 0);\n\nconst registros = [];\nconst ids = new Set();\n\nfor (const fila of filas) {\n  // Ignora filas completamente vacías, aunque incluyan row_number.\n  const tieneDatos = Object.entries(fila).some(([campo, valor]) =>\n    campo !== 'row_number' &&\n    valor !== null &&\n    valor !== undefined &&\n    String(valor).trim() !== ''\n  );\n\n  if (!tieneDatos) continue;\n\n  const id = String(fila.inscripcion_id ?? '').trim();\n  const usuarioId = String(fila.usuario_id ?? '').trim();\n  const eventoId = String(fila.evento_id ?? '').trim();\n  const estado = String(fila.estado ?? '').trim();\n\n  if (!id || !usuarioId || !eventoId) {\n    throw new Error('Existe una inscripción sin identificadores completos.');\n  }\n\n  if (ids.has(id)) {\n    throw new Error('Existen identificadores de inscripción duplicados.');\n  }\n\n  ids.add(id);\n\n  if (eventoId !== contexto.datos.evento_id) continue;\n\n  if (!['CONFIRMADA', 'LISTA_ESPERA', 'CANCELADA'].includes(estado)) {\n    throw new Error('Existe una inscripción del evento con estado desconocido.');\n  }\n\n  registros.push({\n    inscripcion_id: id,\n    usuario_id: usuarioId,\n    estado,\n  });\n}\n\nconst activas = registros.filter(registro =>\n  registro.estado === 'CONFIRMADA' ||\n  registro.estado === 'LISTA_ESPERA'\n);\n\n// Detecta también inconsistencias ya existentes en el evento.\nconst usuariosActivos = new Set();\n\nfor (const registro of activas) {\n  if (usuariosActivos.has(registro.usuario_id)) {\n    throw new Error('Un usuario tiene varias inscripciones activas en el evento.');\n  }\n\n  usuariosActivos.add(registro.usuario_id);\n}\n\nif (usuariosActivos.has(contexto.datos.usuario_id)) {\n  return rechazar(\n    409,\n    'INSCRIPCION_DUPLICADA',\n    'Ya tienes una inscripción activa en este evento.'\n  );\n}\n\nconst confirmadas = activas.filter(\n  registro => registro.estado === 'CONFIRMADA'\n).length;\n\nconst enEspera = activas.filter(\n  registro => registro.estado === 'LISTA_ESPERA'\n).length;\n\nif (confirmadas > capacidad) {\n  throw new Error('Las inscripciones confirmadas superan la capacidad.');\n}\n\nconst cuposDisponibles = capacidad - confirmadas;\n\n// No adelanta a personas que ya están esperando si se liberó un cupo.\nconst estadoPropuesto = (\n  cuposDisponibles > 0 && enEspera === 0\n)\n  ? 'CONFIRMADA'\n  : 'LISTA_ESPERA';\n\nreturn [{\n  json: {\n    continuar: true,\n    datos: contexto.datos,\n    telegram: contexto.telegram,\n    evento: contexto.evento,\n    disponibilidad: {\n      capacidad,\n      confirmadas,\n      en_espera: enEspera,\n      cupos_disponibles: cuposDisponibles,\n    },\n    estado_propuesto: estadoPropuesto,\n    status_http: 200,\n    respuesta: {\n      ok: true,\n      mensaje:\n        'Validaciones y disponibilidad comprobadas. Todavía no se ha creado una inscripción.',\n      data: {\n        evento_id: contexto.datos.evento_id,\n        capacidad,\n        confirmadas,\n        en_espera: enEspera,\n        cupos_disponibles: cuposDisponibles,\n        estado_propuesto: estadoPropuesto,\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2800,
+        -352
+      ],
+      "id": "343302c7-ef0b-427f-bd5c-6f8b00f0b6be",
+      "name": "Evaluar duplicado y cupos",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f8788e92-740f-4b29-b733-5fc60295655c",
+              "leftValue": "={{ $json.continuar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3024,
+        -400
+      ],
+      "id": "0e1ff374-9dff-4b0b-9045-b358128d07b4",
+      "name": "¿Puede crear inscripción?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { randomBytes } = require('crypto');\n\nconst contexto = $input.first().json;\n\nif (\n  contexto.continuar !== true ||\n  !contexto.datos?.usuario_id ||\n  !contexto.datos?.evento_id ||\n  contexto.evento?.evento_id !== contexto.datos.evento_id ||\n  !contexto.telegram?.vinculacion_id\n) {\n  throw new Error('Contexto incompleto para crear la inscripción.');\n}\n\nconst estado = contexto.estado_propuesto;\n\nif (!['CONFIRMADA', 'LISTA_ESPERA'].includes(estado)) {\n  throw new Error('Estado propuesto inválido.');\n}\n\nconst disponibilidad = contexto.disponibilidad;\n\nif (\n  !disponibilidad ||\n  !Number.isSafeInteger(disponibilidad.capacidad) ||\n  disponibilidad.capacidad < 1 ||\n  !Number.isSafeInteger(disponibilidad.confirmadas) ||\n  disponibilidad.confirmadas < 0 ||\n  disponibilidad.confirmadas > disponibilidad.capacidad ||\n  !Number.isSafeInteger(disponibilidad.en_espera) ||\n  disponibilidad.en_espera < 0 ||\n  disponibilidad.cupos_disponibles !==\n    disponibilidad.capacidad - disponibilidad.confirmadas\n) {\n  throw new Error('Datos de disponibilidad inconsistentes.');\n}\n\nconst estadoCalculado = (\n  disponibilidad.cupos_disponibles > 0 &&\n  disponibilidad.en_espera === 0\n)\n  ? 'CONFIRMADA'\n  : 'LISTA_ESPERA';\n\nif (estado !== estadoCalculado) {\n  throw new Error('El estado propuesto no coincide con la disponibilidad.');\n}\n\nif (!Number.isFinite(contexto.evento.inicio_ms)) {\n  throw new Error('Inicio del evento inválido.');\n}\n\nif (contexto.evento.inicio_ms <= Date.now()) {\n  return [{\n    json: {\n      continuar: false,\n      status_http: 409,\n      respuesta: {\n        ok: false,\n        error: {\n          codigo: 'EVENTO_NO_DISPONIBLE',\n          mensaje: 'El evento ya comenzó o su fecha ya pasó.',\n        },\n      },\n    },\n  }];\n}\n\n// Número correlativo de entrada en espera para este evento.\n// No representa la posición actual después de cancelaciones.\nlet ordenEspera = '';\n\nif (estado === 'LISTA_ESPERA') {\n  const filas = $('Leer inscripciones para disponibilidad')\n    .all()\n    .map(item => item.json)\n    .filter(fila =>\n      String(fila.evento_id ?? '').trim() === contexto.datos.evento_id\n    );\n\n  let maximoOrden = 0;\n\n  for (const fila of filas) {\n    const valor = String(fila.orden_espera ?? '').trim();\n\n    if (valor === '') {\n      if (String(fila.estado ?? '').trim() === 'LISTA_ESPERA') {\n        throw new Error('Existe una inscripción en espera sin orden.');\n      }\n      continue;\n    }\n\n    if (!/^[1-9]\\d*$/.test(valor)) {\n      throw new Error('Existe un orden de espera inválido.');\n    }\n\n    const numero = Number(valor);\n\n    if (!Number.isSafeInteger(numero)) {\n      throw new Error('El orden de espera supera el rango permitido.');\n    }\n\n    maximoOrden = Math.max(maximoOrden, numero);\n  }\n\n  if (!Number.isSafeInteger(maximoOrden + 1)) {\n    throw new Error('No es posible asignar otro orden de espera.');\n  }\n\n  ordenEspera = maximoOrden + 1;\n}\n\nconst ahora = new Date().toISOString();\nconst inscripcionId = `INS-${randomBytes(16).toString('hex')}`;\n\nconst registro = {\n  inscripcion_id: inscripcionId,\n  usuario_id: contexto.datos.usuario_id,\n  evento_id: contexto.datos.evento_id,\n  estado,\n  fecha_inscripcion: ahora,\n  fecha_actualizacion: ahora,\n  nombre_acreditacion: contexto.datos.nombre_acreditacion,\n  observaciones: contexto.datos.observaciones,\n  origen: 'WEB',\n  orden_espera: ordenEspera,\n};\n\nconst auditoria = {\n  auditoria_id: `AUD-${inscripcionId}-CREATE`,\n  inscripcion_id: inscripcionId,\n  usuario_id: registro.usuario_id,\n  evento_id: registro.evento_id,\n  accion: 'CREATE',\n  estado_anterior: '',\n  estado_nuevo: estado,\n  fecha: ahora,\n  resultado: 'OK',\n  detalle: 'Inscripción creada desde WEB.',\n};\n\nreturn [{\n  json: {\n    continuar: true,\n    registro,\n    auditoria,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3248,
+        -496
+      ],
+      "id": "f43099fe-4744-4034-95c0-af326fd90045",
+      "name": "Preparar nueva inscripción",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2b31733f-e233-4182-8803-89a8c643d5fa",
+              "leftValue": "={{ $json.continuar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3472,
+        -592
+      ],
+      "id": "935c56da-75de-4986-9a98-f1e03a1b8302",
+      "name": "¿Guardar nueva inscripción?"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "list",
+          "cachedResultName": "EP06_Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "inscripcion_id": "={{ $json.registro.inscripcion_id }}",
+            "usuario_id": "={{ $json.registro.usuario_id }}",
+            "evento_id": "={{ $json.registro.evento_id }}",
+            "estado": "={{ $json.registro.estado }}",
+            "fecha_inscripcion": "={{ $json.registro.fecha_inscripcion }}",
+            "fecha_actualizacion": "={{ $json.registro.fecha_actualizacion }}",
+            "nombre_acreditacion": "={{ $json.registro.nombre_acreditacion }}",
+            "observaciones": "={{ $json.registro.observaciones }}",
+            "origen": "={{ $json.registro.origen }}",
+            "orden_espera": "={{ $json.registro.orden_espera }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "inscripcion_id",
+              "displayName": "inscripcion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "evento_id",
+              "displayName": "evento_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_inscripcion",
+              "displayName": "fecha_inscripcion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_actualizacion",
+              "displayName": "fecha_actualizacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nombre_acreditacion",
+              "displayName": "nombre_acreditacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "observaciones",
+              "displayName": "observaciones",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "origen",
+              "displayName": "origen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "orden_espera",
+              "displayName": "orden_espera",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3696,
+        -592
+      ],
+      "id": "82a997a8-aaf8-4a83-a7db-a333187ddf78",
+      "name": "Guardar nueva inscripción",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const preparado = $('Preparar nueva inscripción').first().json;\nconst items = $input.all();\n\nif (items.length !== 1) {\n  throw new Error('La escritura no devolvió un único registro.');\n}\n\nconst guardado = items[0].json;\n\n// Comprueba que la salida del nodo de escritura corresponde al registro.\nfor (const [campo, esperado] of Object.entries(preparado.registro)) {\n  if (String(guardado[campo] ?? '') !== String(esperado ?? '')) {\n    throw new Error('La salida de escritura no coincide con la inscripción.');\n  }\n}\n\nreturn [{\n  json: preparado.auditoria,\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3920,
+        -640
+      ],
+      "id": "2de5efd7-56f6-4140-88bf-af779a2db7f4",
+      "name": "Preparar auditoría de inscripción",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "list",
+          "cachedResultName": "EP06_Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 843473560,
+          "mode": "list",
+          "cachedResultName": "Auditoria_Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit#gid=843473560"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "auditoria_id": "={{ $json.auditoria_id }}",
+            "inscripcion_id": "={{ $json.inscripcion_id }}",
+            "usuario_id": "={{ $json.usuario_id }}",
+            "evento_id": "={{ $json.evento_id }}",
+            "accion": "={{ $json.accion }}",
+            "estado_anterior": "={{ $json.estado_anterior }}",
+            "estado_nuevo": "={{ $json.estado_nuevo }}",
+            "fecha": "={{ $json.fecha }}",
+            "resultado": "={{ $json.resultado }}",
+            "detalle": "={{ $json.detalle }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "auditoria_id",
+              "displayName": "auditoria_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "inscripcion_id",
+              "displayName": "inscripcion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "evento_id",
+              "displayName": "evento_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "accion",
+              "displayName": "accion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado_anterior",
+              "displayName": "estado_anterior",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado_nuevo",
+              "displayName": "estado_nuevo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resultado",
+              "displayName": "resultado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4144,
+        -736
+      ],
+      "id": "04826aca-f1c7-46dd-b47c-8fb6866505b8",
+      "name": "Guardar auditoría de inscripción",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const preparado = $('Preparar nueva inscripción').first().json;\nconst items = $input.all();\n\nif (items.length !== 1) {\n  throw new Error('La escritura no devolvió una única auditoría.');\n}\n\nconst guardado = items[0].json;\n\nfor (const [campo, esperado] of Object.entries(preparado.auditoria)) {\n  if (String(guardado[campo] ?? '') !== String(esperado ?? '')) {\n    throw new Error('La salida de escritura no coincide con la auditoría.');\n  }\n}\n\nconst registro = preparado.registro;\n\nreturn [{\n  json: {\n    respuesta: {\n      ok: true,\n      mensaje: registro.estado === 'CONFIRMADA'\n        ? 'Inscripción confirmada.'\n        : 'Inscripción registrada en lista de espera.',\n      data: {\n        inscripcion_id: registro.inscripcion_id,\n        evento_id: registro.evento_id,\n        estado: registro.estado,\n        fecha_inscripcion: registro.fecha_inscripcion,\n        nombre_acreditacion: registro.nombre_acreditacion,\n        orden_espera: registro.orden_espera === ''\n          ? null\n          : registro.orden_espera,\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4368,
+        -832
+      ],
+      "id": "fe75d1dd-00c0-476c-8110-da4cdaeb50f0",
+      "name": "Preparar respuesta de inscripción creada",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.respuesta }}",
+        "options": {
+          "responseCode": 201,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        4880,
+        -880
+      ],
+      "id": "8989d3a3-9699-4ed1-b023-1a3487080caa",
+      "name": "Responder inscripción creada"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": false,\n  \"error\": {\n    \"codigo\": \"GUARDADO_NO_CONFIRMADO\",\n    \"mensaje\": \"No fue posible confirmar el guardado completo de la inscripción y su auditoría. Revisa ambos registros antes de reintentar.\"\n  }\n}",
+        "options": {
+          "responseCode": 503
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        4576,
+        -384
+      ],
+      "id": "6d0f07a9-05a6-4f93-bda2-8053ec4cc0ca",
+      "name": "Responder guardado no confirmado"
+    },
+    {
+      "parameters": {
+        "path": "eventpass/inscripciones",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -512,
+        752
+      ],
+      "id": "db76ecf0-43c1-4802-aaa3-b072cc318e4f",
+      "name": "Webhook - Consultar mis inscripciones",
+      "webhookId": "10b87140-dfd4-4eb2-add2-74baedf1d971"
+    },
+    {
+      "parameters": {
+        "jsCode": "const solicitud = $input.first().json;\n\nreturn [{\n  json: {\n    headers: {\n      authorization: String(\n        solicitud.headers?.authorization ?? ''\n      ),\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        768
+      ],
+      "id": "e215010d-0f40-4960-a4ba-0895d62d134f",
+      "name": "Preparar autenticación de consulta de inscripciones"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "UwOk41MQnPHz9dxs",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/UwOk41MQnPHz9dxs",
+          "cachedResultName": "SW_validar_sesion"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -48,
+        768
+      ],
+      "id": "0226dbcd-7c7f-458c-827c-6bf3fe8cd6e1",
+      "name": "Autenticar consulta de inscripciones",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": false,\n  \"error\": {\n    \"codigo\": \"CONSULTA_INSCRIPCIONES_NO_DISPONIBLE\",\n    \"mensaje\": \"No fue posible consultar tus inscripciones.\"\n  }\n}",
+        "options": {
+          "responseCode": 503,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1184,
+        656
+      ],
+      "id": "ccd3053e-f4ba-4a02-ad8f-9e0f93e3f529",
+      "name": "Responder error de consulta de inscripciones"
+    },
+    {
+      "parameters": {
+        "jsCode": "const autenticacion = $input.first().json;\n\nif (![200, 401, 503].includes(autenticacion.status_http)) {\n  throw new Error('Respuesta de autenticación inesperada.');\n}\n\nif (autenticacion.status_http !== 200) {\n  if (autenticacion.respuesta?.ok !== false) {\n    throw new Error('Respuesta de rechazo de autenticación inválida.');\n  }\n\n  return [{\n    json: {\n      continuar: false,\n      status_http: autenticacion.status_http,\n      respuesta: autenticacion.respuesta,\n    },\n  }];\n}\n\nconst usuario = autenticacion.respuesta?.data?.usuario;\n\nif (\n  autenticacion.respuesta?.ok !== true ||\n  typeof usuario?.usuario_id !== 'string' ||\n  !usuario.usuario_id.trim()\n) {\n  throw new Error('No se recibió un usuario autenticado válido.');\n}\n\n// Esta consulta no admite seleccionar otro usuario mediante parámetros.\nconst solicitud = $('Webhook - Consultar mis inscripciones').first().json;\n\nif (Object.keys(solicitud.query ?? {}).length > 0) {\n  return [{\n    json: {\n      continuar: false,\n      status_http: 400,\n      respuesta: {\n        ok: false,\n        error: {\n          codigo: 'CONSULTA_INSCRIPCIONES_INVALIDA',\n          mensaje: 'Esta consulta no admite parámetros.',\n        },\n      },\n    },\n  }];\n}\n\nreturn [{\n  json: {\n    continuar: true,\n    usuario_id: usuario.usuario_id,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        672
+      ],
+      "id": "de0bd3a9-f0ba-4665-86e1-cfba3366e595",
+      "name": "Validar sesión para consultar inscripciones",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4bf330b2-2fc3-4939-a0e9-58f09e4c5655",
+              "leftValue": "={{ $json.continuar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        400,
+        560
+      ],
+      "id": "b27bd873-941b-4407-be85-62589f3ad70e",
+      "name": "¿Sesión válida para consultar inscripciones?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "list",
+          "cachedResultName": "EP06_Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "usuario_id",
+              "lookupValue": "={{ $json.usuario_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        656,
+        480
+      ],
+      "id": "b11552de-0e58-4e20-bd0d-621f1a4dd522",
+      "name": "Buscar inscripciones del usuario",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const contexto = $(\n  'Validar sesión para consultar inscripciones'\n).first().json;\n\nif (\n  contexto.continuar !== true ||\n  typeof contexto.usuario_id !== 'string' ||\n  !contexto.usuario_id\n) {\n  throw new Error('Contexto de consulta inválido.');\n}\n\nconst filas = $input.all()\n  .map(item => item.json)\n  .filter(fila => {\n    if (!fila || typeof fila !== 'object') return false;\n\n    // Ignora la salida vacía de Sheets y filas sin contenido.\n    return Object.entries(fila).some(([campo, valor]) =>\n      campo !== 'row_number' &&\n      valor !== null &&\n      valor !== undefined &&\n      String(valor).trim() !== ''\n    );\n  });\n\nconst ids = new Set();\nconst estadosPermitidos = [\n  'CONFIRMADA',\n  'LISTA_ESPERA',\n  'CANCELADA',\n];\n\nconst inscripciones = filas.map(fila => {\n  const usuarioId = String(fila.usuario_id ?? '').trim();\n  const inscripcionId = String(fila.inscripcion_id ?? '').trim();\n  const eventoId = String(fila.evento_id ?? '').trim();\n  const estado = String(fila.estado ?? '').trim();\n\n  // Comprobación adicional para no devolver registros de otra cuenta.\n  if (usuarioId !== contexto.usuario_id) {\n    throw new Error('La consulta devolvió registros de otro usuario.');\n  }\n\n  if (!inscripcionId || !eventoId) {\n    throw new Error('Existe una inscripción sin identificadores completos.');\n  }\n\n  if (ids.has(inscripcionId)) {\n    throw new Error('Existen identificadores de inscripción duplicados.');\n  }\n\n  ids.add(inscripcionId);\n\n  if (!estadosPermitidos.includes(estado)) {\n    throw new Error('Existe una inscripción con estado desconocido.');\n  }\n\n  const fechaInscripcion = String(fila.fecha_inscripcion ?? '').trim();\n  const fechaActualizacion = String(fila.fecha_actualizacion ?? '').trim();\n\n  const creadaMs = Date.parse(fechaInscripcion);\n  const actualizadaMs = Date.parse(fechaActualizacion);\n\n  if (\n    !Number.isFinite(creadaMs) ||\n    !Number.isFinite(actualizadaMs) ||\n    actualizadaMs < creadaMs\n  ) {\n    throw new Error('Existe una inscripción con fechas inconsistentes.');\n  }\n\n  let ordenEspera = null;\n\n  if (estado === 'LISTA_ESPERA') {\n    const textoOrden = String(fila.orden_espera ?? '').trim();\n\n    if (!/^[1-9]\\d*$/.test(textoOrden)) {\n      throw new Error('Existe una inscripción en espera sin orden válido.');\n    }\n\n    ordenEspera = Number(textoOrden);\n\n    if (!Number.isSafeInteger(ordenEspera)) {\n      throw new Error('El orden de espera supera el rango permitido.');\n    }\n  }\n\n  return {\n    inscripcion_id: inscripcionId,\n    evento_id: eventoId,\n    estado,\n    fecha_inscripcion: new Date(creadaMs).toISOString(),\n    fecha_actualizacion: new Date(actualizadaMs).toISOString(),\n    nombre_acreditacion: String(fila.nombre_acreditacion ?? ''),\n    observaciones: String(fila.observaciones ?? ''),\n    origen: String(fila.origen ?? ''),\n    orden_espera: ordenEspera,\n  };\n});\n\n// Primero las inscripciones más recientes.\ninscripciones.sort((a, b) =>\n  Date.parse(b.fecha_inscripcion) - Date.parse(a.fecha_inscripcion) ||\n  a.inscripcion_id.localeCompare(b.inscripcion_id)\n);\n\nreturn [{\n  json: {\n    status_http: 200,\n    respuesta: {\n      ok: true,\n      data: {\n        total: inscripciones.length,\n        inscripciones,\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        384
+      ],
+      "id": "a79a36c5-a4d4-4ac1-a653-76fc73164660",
+      "name": "Preparar listado de mis inscripciones",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.respuesta }}",
+        "options": {
+          "responseCode": "={{ $json.status_http }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        944,
+        880
+      ],
+      "id": "1e492d05-4414-4e3d-9237-718000d30bd4",
+      "name": "Responder consulta de inscripciones"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eventpass/inscripciones/cancelar",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        112,
+        1392
+      ],
+      "id": "738b3834-0c87-4eca-8f44-1fae50a079c0",
+      "name": "Webhook - Cancelar inscripción",
+      "webhookId": "b0d13cd8-d79a-47f8-a180-0432faada87f"
+    },
+    {
+      "parameters": {
+        "jsCode": "const solicitud = $input.first().json;\n\nreturn [{\n  json: {\n    headers: {\n      authorization: String(\n        solicitud.headers?.authorization ?? ''\n      ),\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        1392
+      ],
+      "id": "708befd2-1223-4190-8879-9f2eecc0c3e8",
+      "name": "Preparar autenticación de cancelación"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "UwOk41MQnPHz9dxs",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/UwOk41MQnPHz9dxs",
+          "cachedResultName": "SW_validar_sesion"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        560,
+        1392
+      ],
+      "id": "1cf2f84b-62ba-45c5-876f-6da4461eb302",
+      "name": "Autenticar cancelación de inscripción",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": false,\n  \"error\": {\n    \"codigo\": \"CANCELACION_NO_DISPONIBLE\",\n    \"mensaje\": \"No fue posible procesar la solicitud de cancelación.\"\n  }\n}",
+        "options": {
+          "responseCode": 503,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1792,
+        1744
+      ],
+      "id": "8e6ac127-df00-4c39-9a15-bc06eb1d5e1b",
+      "name": "Responder error de cancelación"
+    },
+    {
+      "parameters": {
+        "jsCode": "const autenticacion = $input.first().json;\n\nfunction rechazar(status, codigo, mensaje) {\n  return [{\n    json: {\n      continuar: false,\n      status_http: status,\n      respuesta: {\n        ok: false,\n        error: { codigo, mensaje },\n      },\n    },\n  }];\n}\n\n// Comprobar la respuesta del subflujo de autenticación.\nif (![200, 401, 503].includes(autenticacion.status_http)) {\n  throw new Error('Respuesta de autenticación inesperada.');\n}\n\nif (autenticacion.status_http !== 200) {\n  if (autenticacion.respuesta?.ok !== false) {\n    throw new Error('Respuesta de rechazo de autenticación inválida.');\n  }\n\n  return [{\n    json: {\n      continuar: false,\n      status_http: autenticacion.status_http,\n      respuesta: autenticacion.respuesta,\n    },\n  }];\n}\n\nconst usuario = autenticacion.respuesta?.data?.usuario;\n\nif (\n  autenticacion.respuesta?.ok !== true ||\n  typeof usuario?.usuario_id !== 'string' ||\n  !usuario.usuario_id.trim()\n) {\n  throw new Error('No se recibió un usuario autenticado válido.');\n}\n\n// Leer la solicitud original.\nconst solicitud = $('Webhook - Cancelar inscripción').first().json;\n\nconst tipoContenido = String(\n  solicitud.headers?.['content-type'] ?? ''\n).split(';')[0].trim().toLowerCase();\n\nif (tipoContenido !== 'application/json') {\n  return rechazar(\n    415,\n    'TIPO_CONTENIDO_NO_PERMITIDO',\n    'Envía la solicitud con Content-Type application/json.'\n  );\n}\n\nif (Object.keys(solicitud.query ?? {}).length > 0) {\n  return rechazar(\n    400,\n    'SOLICITUD_CANCELACION_INVALIDA',\n    'Esta solicitud no admite parámetros en la URL.'\n  );\n}\n\nconst cuerpo = solicitud.body;\n\nif (\n  cuerpo === null ||\n  typeof cuerpo !== 'object' ||\n  Array.isArray(cuerpo)\n) {\n  return rechazar(\n    400,\n    'SOLICITUD_CANCELACION_INVALIDA',\n    'El cuerpo debe ser un objeto JSON.'\n  );\n}\n\nconst camposNoPermitidos = Object.keys(cuerpo).filter(\n  campo => campo !== 'inscripcion_id'\n);\n\nif (camposNoPermitidos.length > 0) {\n  return rechazar(\n    400,\n    'SOLICITUD_CANCELACION_INVALIDA',\n    'La solicitud contiene campos no permitidos.'\n  );\n}\n\nif (typeof cuerpo.inscripcion_id !== 'string') {\n  return rechazar(\n    400,\n    'SOLICITUD_CANCELACION_INVALIDA',\n    'Debes indicar un identificador de inscripción válido.'\n  );\n}\n\nconst inscripcionId = cuerpo.inscripcion_id.trim();\n\nif (!/^INS-[a-f0-9]{32}$/.test(inscripcionId)) {\n  return rechazar(\n    400,\n    'SOLICITUD_CANCELACION_INVALIDA',\n    'El identificador de inscripción tiene un formato inválido.'\n  );\n}\n\n// El usuario se obtiene exclusivamente de la sesión.\nreturn [{\n  json: {\n    continuar: true,\n    datos: {\n      usuario_id: usuario.usuario_id,\n      inscripcion_id: inscripcionId,\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        1264
+      ],
+      "id": "360b8cb0-c785-433d-b0d5-78938730ece3",
+      "name": "Validar solicitud de cancelación",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "dfb9f189-4ae4-45d8-8cbd-7d07b7988288",
+              "leftValue": "={{ $json.continuar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1040,
+        1152
+      ],
+      "id": "a32e564a-2e94-41cd-8843-85694f4689e6",
+      "name": "¿Solicitud de cancelación válida?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.respuesta }}",
+        "options": {
+          "responseCode": "={{ $json.status_http }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2432,
+        1744
+      ],
+      "id": "d75213f5-6d61-46e6-ab07-87ceee2e7f5d",
+      "name": "Responder validación de cancelación"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "list",
+          "cachedResultName": "EP06_Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "inscripcion_id",
+              "lookupValue": "={{ $json.datos.inscripcion_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1296,
+        1168
+      ],
+      "id": "9f5a3af6-1020-4c2b-b111-7879d52fa1f8",
+      "name": "Buscar inscripción para cancelar",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const contexto = $('Validar solicitud de cancelación').first().json;\n\nif (\n  contexto.continuar !== true ||\n  !contexto.datos?.usuario_id ||\n  !contexto.datos?.inscripcion_id\n) {\n  throw new Error('Contexto de cancelación inválido.');\n}\n\nfunction rechazar(status, codigo, mensaje) {\n  return [{\n    json: {\n      continuar: false,\n      status_http: status,\n      respuesta: {\n        ok: false,\n        error: { codigo, mensaje },\n      },\n    },\n  }];\n}\n\n// Always Output Data puede producir un elemento vacío\n// cuando Google Sheets no encuentra coincidencias.\nconst filas = $input.all()\n  .map(item => item.json)\n  .filter(fila =>\n    Object.entries(fila).some(([campo, valor]) =>\n      campo !== 'row_number' &&\n      valor !== null &&\n      valor !== undefined &&\n      String(valor).trim() !== ''\n    )\n  );\n\nif (filas.length === 0) {\n  return rechazar(\n    404,\n    'INSCRIPCION_NO_ENCONTRADA',\n    'No se encontró la inscripción solicitada.'\n  );\n}\n\nif (filas.length !== 1) {\n  throw new Error('Existen identificadores de inscripción duplicados.');\n}\n\nconst fila = filas[0];\n\nconst inscripcionId = String(fila.inscripcion_id ?? '').trim();\nconst usuarioId = String(fila.usuario_id ?? '').trim();\nconst eventoId = String(fila.evento_id ?? '').trim();\nconst estado = String(fila.estado ?? '').trim();\n\nif (inscripcionId !== contexto.datos.inscripcion_id) {\n  throw new Error('La búsqueda devolvió una inscripción diferente.');\n}\n\nif (!usuarioId) {\n  throw new Error('La inscripción no tiene un propietario válido.');\n}\n\n// Una inscripción ajena se responde igual que una inexistente.\n// Así no revelamos inscripciones de otros usuarios.\nif (usuarioId !== contexto.datos.usuario_id) {\n  return rechazar(\n    404,\n    'INSCRIPCION_NO_ENCONTRADA',\n    'No se encontró la inscripción solicitada.'\n  );\n}\n\nif (!/^EVT-[A-Za-z0-9_-]{1,76}$/.test(eventoId)) {\n  throw new Error('La inscripción tiene un evento inválido.');\n}\n\nconst estadosPermitidos = [\n  'CONFIRMADA',\n  'LISTA_ESPERA',\n  'CANCELADA',\n];\n\nif (!estadosPermitidos.includes(estado)) {\n  throw new Error('La inscripción tiene un estado desconocido.');\n}\n\nif (estado === 'CANCELADA') {\n  return rechazar(\n    409,\n    'INSCRIPCION_YA_CANCELADA',\n    'Esta inscripción ya está cancelada.'\n  );\n}\n\nconst fechaInscripcion = String(\n  fila.fecha_inscripcion ?? ''\n).trim();\n\nconst fechaActualizacion = String(\n  fila.fecha_actualizacion ?? ''\n).trim();\n\nconst creadaMs = Date.parse(fechaInscripcion);\nconst actualizadaMs = Date.parse(fechaActualizacion);\n\nif (\n  !Number.isFinite(creadaMs) ||\n  !Number.isFinite(actualizadaMs) ||\n  actualizadaMs < creadaMs\n) {\n  throw new Error('La inscripción tiene fechas inconsistentes.');\n}\n\nlet ordenEspera = null;\n\nif (estado === 'LISTA_ESPERA') {\n  const textoOrden = String(fila.orden_espera ?? '').trim();\n\n  if (!/^[1-9]\\d*$/.test(textoOrden)) {\n    throw new Error('La inscripción en espera no tiene un orden válido.');\n  }\n\n  ordenEspera = Number(textoOrden);\n\n  if (!Number.isSafeInteger(ordenEspera)) {\n    throw new Error('El orden de espera supera el rango permitido.');\n  }\n}\n\nreturn [{\n  json: {\n    continuar: true,\n    datos: {\n      usuario_id: usuarioId,\n      inscripcion_id: inscripcionId,\n      evento_id: eventoId,\n    },\n    inscripcion: {\n      inscripcion_id: inscripcionId,\n      usuario_id: usuarioId,\n      evento_id: eventoId,\n      estado,\n      fecha_inscripcion: fechaInscripcion,\n      fecha_actualizacion: fechaActualizacion,\n      nombre_acreditacion: String(fila.nombre_acreditacion ?? ''),\n      observaciones: String(fila.observaciones ?? ''),\n      origen: String(fila.origen ?? ''),\n      orden_espera: ordenEspera,\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        1072
+      ],
+      "id": "ace4e86d-1271-460a-ac44-479779afde4b",
+      "name": "Validar inscripción para cancelar",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f68657b9-6aeb-4692-b617-f5896057bfcb",
+              "leftValue": "={{ $json.continuar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1760,
+        1072
+      ],
+      "id": "c2a05c67-95a3-4d13-86e9-bdd513a93a9d",
+      "name": "¿Inscripción válida para cancelar?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1dMO2t9hHFzOJ5ItqBs7uvoTxXTGcndUTGJ9qOuNgqrM",
+          "mode": "list",
+          "cachedResultName": "EP04_Eventos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1dMO2t9hHFzOJ5ItqBs7uvoTxXTGcndUTGJ9qOuNgqrM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Eventos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1dMO2t9hHFzOJ5ItqBs7uvoTxXTGcndUTGJ9qOuNgqrM/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "evento_id",
+              "lookupValue": "={{ $json.datos.evento_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2080,
+        1136
+      ],
+      "id": "0a222d81-68c4-4e28-8e03-90285fb29afb",
+      "name": "Buscar evento para cancelar inscripción",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const contexto = $('Validar inscripción para cancelar').first().json;\n\nif (\n  contexto.continuar !== true ||\n  !contexto.datos?.inscripcion_id ||\n  !contexto.datos?.usuario_id ||\n  !contexto.datos?.evento_id ||\n  !contexto.inscripcion\n) {\n  throw new Error('Contexto de cancelación incompleto.');\n}\n\nfunction rechazar(codigo, mensaje) {\n  return [{\n    json: {\n      continuar: false,\n      status_http: 409,\n      respuesta: {\n        ok: false,\n        error: { codigo, mensaje },\n      },\n    },\n  }];\n}\n\n// Descartar el elemento vacío de Always Output Data.\nconst filas = $input.all()\n  .map(item => item.json)\n  .filter(fila =>\n    Object.entries(fila).some(([campo, valor]) =>\n      campo !== 'row_number' &&\n      valor !== null &&\n      valor !== undefined &&\n      String(valor).trim() !== ''\n    )\n  );\n\n// Una inscripción que apunta a un evento inexistente\n// requiere revisión de integridad.\nif (filas.length === 0) {\n  throw new Error('No existe el evento asociado a la inscripción.');\n}\n\nif (filas.length !== 1) {\n  throw new Error('Existen identificadores de evento duplicados.');\n}\n\nconst evento = filas[0];\n\nconst eventoId = String(evento.evento_id ?? '').trim();\nconst estado = String(evento.estado ?? '').trim();\n\nif (eventoId !== contexto.datos.evento_id) {\n  throw new Error('La búsqueda devolvió un evento diferente.');\n}\n\nconst estadosConocidos = [\n  'BORRADOR',\n  'PUBLICADO',\n  'CERRADO',\n  'CANCELADO',\n];\n\nif (!estadosConocidos.includes(estado)) {\n  throw new Error('El evento tiene un estado desconocido.');\n}\n\nif (!['PUBLICADO', 'CERRADO'].includes(estado)) {\n  return rechazar(\n    'EVENTO_NO_DISPONIBLE_PARA_CANCELACION',\n    'El estado actual del evento no permite esta cancelación.'\n  );\n}\n\n// Formatos esperados en EP04:\n// fecha: YYYY-MM-DD\n// hora: HH:mm\nconst fecha = String(evento.fecha ?? '').trim();\nconst hora = String(evento.hora ?? '').trim();\n\nconst partesFecha = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(fecha);\nconst partesHora = /^(\\d{2}):(\\d{2})$/.exec(hora);\n\nif (!partesFecha || !partesHora) {\n  throw new Error('El evento tiene una fecha u hora con formato inválido.');\n}\n\nconst anio = Number(partesFecha[1]);\nconst mes = Number(partesFecha[2]);\nconst dia = Number(partesFecha[3]);\nconst horas = Number(partesHora[1]);\nconst minutos = Number(partesHora[2]);\n\nif (\n  anio < 1000 ||\n  mes < 1 || mes > 12 ||\n  dia < 1 || dia > 31 ||\n  horas < 0 || horas > 23 ||\n  minutos < 0 || minutos > 59\n) {\n  throw new Error('La fecha u hora del evento está fuera de rango.');\n}\n\n// Evitar aceptar fechas inexistentes, como el 31 de febrero.\nconst calendario = new Date(Date.UTC(anio, mes - 1, dia));\n\nif (\n  calendario.getUTCFullYear() !== anio ||\n  calendario.getUTCMonth() !== mes - 1 ||\n  calendario.getUTCDate() !== dia\n) {\n  throw new Error('La fecha del evento no existe en el calendario.');\n}\n\n// Los eventos del proyecto utilizan la hora de Colombia.\nconst inicioMs = Date.parse(`${fecha}T${hora}:00-05:00`);\n\nif (!Number.isFinite(inicioMs)) {\n  throw new Error('No fue posible interpretar el inicio del evento.');\n}\n\nif (Date.now() >= inicioMs) {\n  return rechazar(\n    'PLAZO_CANCELACION_FINALIZADO',\n    'La inscripción no puede cancelarse porque el evento ya comenzó.'\n  );\n}\n\nreturn [{\n  json: {\n    continuar: true,\n    datos: contexto.datos,\n    inscripcion: contexto.inscripcion,\n    evento: {\n      evento_id: eventoId,\n      estado,\n      fecha,\n      hora,\n      inicio_ms: inicioMs,\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2368,
+        1104
+      ],
+      "id": "bdddb14e-993b-4cc1-bed5-22be98ddfddb",
+      "name": "Validar evento para cancelar inscripción",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "00b2c8ee-675c-41e0-b84e-a93e4de729fa",
+              "leftValue": "={{ $json.continuar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2656,
+        1120
+      ],
+      "id": "fc9c549b-fc76-4eec-8fb9-092adfc98484",
+      "name": "¿Evento permite cancelar inscripción?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const contexto = $input.first().json;\n\nif (\n  contexto.continuar !== true ||\n  !contexto.datos ||\n  !contexto.inscripcion ||\n  !contexto.evento\n) {\n  throw new Error('Contexto de cancelación incompleto.');\n}\n\nconst { datos, inscripcion, evento } = contexto;\n\nif (\n  inscripcion.inscripcion_id !== datos.inscripcion_id ||\n  inscripcion.usuario_id !== datos.usuario_id ||\n  inscripcion.evento_id !== datos.evento_id ||\n  evento.evento_id !== datos.evento_id\n) {\n  throw new Error('Los identificadores de cancelación no coinciden.');\n}\n\nif (!['CONFIRMADA', 'LISTA_ESPERA'].includes(inscripcion.estado)) {\n  throw new Error('El estado de la inscripción no permite preparar la cancelación.');\n}\n\nif (\n  !['PUBLICADO', 'CERRADO'].includes(evento.estado) ||\n  !Number.isFinite(evento.inicio_ms)\n) {\n  throw new Error('El contexto del evento es inválido.');\n}\n\n// Volver a comprobar el plazo inmediatamente antes del guardado.\nconst ahoraMs = Date.now();\n\nif (ahoraMs >= evento.inicio_ms) {\n  return [{\n    json: {\n      continuar: false,\n      status_http: 409,\n      respuesta: {\n        ok: false,\n        error: {\n          codigo: 'PLAZO_CANCELACION_FINALIZADO',\n          mensaje: 'La inscripción no puede cancelarse porque el evento ya comenzó.',\n        },\n      },\n    },\n  }];\n}\n\nconst actualizacionAnteriorMs = Date.parse(\n  inscripcion.fecha_actualizacion\n);\n\nif (\n  !Number.isFinite(actualizacionAnteriorMs) ||\n  ahoraMs < actualizacionAnteriorMs\n) {\n  throw new Error('La fecha de actualización de la inscripción es inconsistente.');\n}\n\nconst fechaCancelacion = new Date(ahoraMs).toISOString();\n\nreturn [{\n  json: {\n    continuar: true,\n\n    datos,\n\n    estado_anterior: inscripcion.estado,\n\n    actualizacion: {\n      inscripcion_id: inscripcion.inscripcion_id,\n      estado: 'CANCELADA',\n      fecha_actualizacion: fechaCancelacion,\n    },\n\n    auditoria: {\n      auditoria_id: `AUD-${inscripcion.inscripcion_id}-CANCEL`,\n      inscripcion_id: inscripcion.inscripcion_id,\n      usuario_id: datos.usuario_id,\n      evento_id: datos.evento_id,\n      accion: 'CANCEL',\n      estado_anterior: inscripcion.estado,\n      estado_nuevo: 'CANCELADA',\n      fecha: fechaCancelacion,\n      resultado: 'OK',\n      detalle: 'Cancelación solicitada por el titular desde la web.',\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        1024
+      ],
+      "id": "548dc23f-f5cd-4ce1-9137-f80f4dcf771f",
+      "name": "Preparar cancelación de inscripción",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e26f3d99-4bb7-4795-8ce3-9764e81b4387",
+              "leftValue": "={{ $json.continuar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3104,
+        1024
+      ],
+      "id": "9918e57a-d897-4c04-9828-1b791c15e53d",
+      "name": "¿Guardar cancelación de inscripción?"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "list",
+          "cachedResultName": "EP06_Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "inscripcion_id": "={{ $json.actualizacion.inscripcion_id }}",
+            "estado": "={{ $json.actualizacion.estado }}",
+            "fecha_actualizacion": "={{ $json.actualizacion.fecha_actualizacion }}"
+          },
+          "matchingColumns": [
+            "inscripcion_id"
+          ],
+          "schema": [
+            {
+              "id": "inscripcion_id",
+              "displayName": "inscripcion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "evento_id",
+              "displayName": "evento_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_inscripcion",
+              "displayName": "fecha_inscripcion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "fecha_actualizacion",
+              "displayName": "fecha_actualizacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nombre_acreditacion",
+              "displayName": "nombre_acreditacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "observaciones",
+              "displayName": "observaciones",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "origen",
+              "displayName": "origen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "orden_espera",
+              "displayName": "orden_espera",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3312,
+        1008
+      ],
+      "id": "8e45b39a-05cb-487f-99cd-505300b562d0",
+      "name": "Guardar cancelación de inscripción",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": false,\n  \"error\": {\n    \"codigo\": \"CANCELACION_NO_CONFIRMADA\",\n    \"mensaje\": \"No se pudo confirmar el guardado completo de la cancelación. Revisa la inscripción y su auditoría antes de repetir la solicitud.\"\n  }\n}",
+        "options": {
+          "responseCode": 503,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        3392,
+        1536
+      ],
+      "id": "20b6c8d5-d2a8-4248-898d-7ccb16e9cded",
+      "name": "Responder cancelación no confirmada"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "list",
+          "cachedResultName": "EP06_Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "inscripcion_id",
+              "lookupValue": "={{ $('Preparar cancelación de inscripción').first().json.actualizacion.inscripcion_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3584,
+        1072
+      ],
+      "id": "3aedf878-267d-4eeb-8bb1-aea68822df92",
+      "name": "Verificar inscripción cancelada",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const preparado = $('Preparar cancelación de inscripción').first().json;\nconst anterior = $('Validar inscripción para cancelar').first().json.inscripcion;\n\nif (\n  preparado.continuar !== true ||\n  !preparado.actualizacion ||\n  !preparado.auditoria ||\n  !anterior\n) {\n  throw new Error('Contexto de verificación incompleto.');\n}\n\nconst filas = $input.all()\n  .map(item => item.json)\n  .filter(fila =>\n    Object.entries(fila).some(([campo, valor]) =>\n      campo !== 'row_number' &&\n      valor !== null &&\n      valor !== undefined &&\n      String(valor).trim() !== ''\n    )\n  );\n\nif (filas.length !== 1) {\n  throw new Error('No se encontró una única inscripción después del guardado.');\n}\n\nconst guardada = filas[0];\nconst esperado = preparado.actualizacion;\n\nfunction texto(valor) {\n  return String(valor ?? '');\n}\n\n// Comprobar identificadores y estado persistido.\nif (\n  texto(guardada.inscripcion_id) !== esperado.inscripcion_id ||\n  texto(guardada.usuario_id) !== preparado.datos.usuario_id ||\n  texto(guardada.evento_id) !== preparado.datos.evento_id ||\n  texto(guardada.estado) !== 'CANCELADA'\n) {\n  throw new Error('La inscripción guardada no coincide con la cancelación.');\n}\n\nif (\n  texto(guardada.fecha_actualizacion) !== esperado.fecha_actualizacion\n) {\n  throw new Error('La fecha de cancelación no quedó guardada como se esperaba.');\n}\n\n// Comprobar que la actualización conservó estos datos.\nconst camposConservados = [\n  'fecha_inscripcion',\n  'nombre_acreditacion',\n  'observaciones',\n  'origen',\n];\n\nfor (const campo of camposConservados) {\n  if (texto(guardada[campo]) !== texto(anterior[campo])) {\n    throw new Error(`La cancelación alteró un campo no previsto: ${campo}.`);\n  }\n}\n\n// Para una inscripción que estaba en espera,\n// conservar su orden histórico.\nif (\n  anterior.estado === 'LISTA_ESPERA' &&\n  texto(guardada.orden_espera).trim() !== texto(anterior.orden_espera)\n) {\n  throw new Error('La cancelación alteró el orden de espera histórico.');\n}\n\n// Solo permitir guardar auditoría después de verificar la inscripción.\nreturn [{\n  json: {\n    ...preparado.auditoria,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        1040
+      ],
+      "id": "b1d77e58-2d6d-4560-a37b-ce5135dc136a",
+      "name": "Preparar auditoría de cancelación",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "list",
+          "cachedResultName": "EP06_Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 843473560,
+          "mode": "list",
+          "cachedResultName": "Auditoria_Inscripciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg/edit#gid=843473560"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "auditoria_id": "={{ $json.auditoria_id }}",
+            "inscripcion_id": "={{ $json.inscripcion_id }}",
+            "usuario_id": "={{ $json.usuario_id }}",
+            "evento_id": "={{ $json.evento_id }}",
+            "accion": "={{ $json.accion }}",
+            "estado_anterior": "={{ $json.estado_anterior }}",
+            "estado_nuevo": "={{ $json.estado_nuevo }}",
+            "fecha": "={{ $json.fecha }}",
+            "resultado": "={{ $json.resultado }}",
+            "detalle": "={{ $json.detalle }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "auditoria_id",
+              "displayName": "auditoria_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "inscripcion_id",
+              "displayName": "inscripcion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "evento_id",
+              "displayName": "evento_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "accion",
+              "displayName": "accion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado_anterior",
+              "displayName": "estado_anterior",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado_nuevo",
+              "displayName": "estado_nuevo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resultado",
+              "displayName": "resultado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4064,
+        944
+      ],
+      "id": "c8f4a845-6200-4f1e-a976-26be91b6c520",
+      "name": "Guardar auditoría de cancelación",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const preparado = $('Preparar cancelación de inscripción').first().json;\nconst esperada = preparado.auditoria;\n\nif (\n  preparado.continuar !== true ||\n  !esperada ||\n  !preparado.actualizacion\n) {\n  throw new Error('Contexto de respuesta incompleto.');\n}\n\nconst elementos = $input.all();\n\nif (elementos.length !== 1) {\n  throw new Error('El guardado de auditoría devolvió una cantidad inesperada de elementos.');\n}\n\nconst salida = elementos[0].json;\n\n// Verificar que el nodo de guardado devolvió los datos esperados.\nfor (const [campo, valor] of Object.entries(esperada)) {\n  if (String(salida[campo] ?? '') !== String(valor ?? '')) {\n    throw new Error(`La respuesta del guardado de auditoría no coincide: ${campo}.`);\n  }\n}\n\nreturn [{\n  json: {\n    status_http: 200,\n    respuesta: {\n      ok: true,\n      mensaje: 'Inscripción cancelada.',\n      data: {\n        inscripcion_id: preparado.datos.inscripcion_id,\n        evento_id: preparado.datos.evento_id,\n        estado: 'CANCELADA',\n        fecha_actualizacion: preparado.actualizacion.fecha_actualizacion,\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4272,
+        944
+      ],
+      "id": "6fac2366-eae9-4f00-8bf6-96730703c406",
+      "name": "Preparar respuesta de cancelación",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.respuesta }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        4576,
+        944
+      ],
+      "id": "ed3407ae-5f93-4321-b448-03ec31c7b661",
+      "name": "Responder inscripción cancelada"
+    },
+    {
+      "id": "5853b816-285c-4840-a087-40ce0cf0061f",
+      "name": "ED · Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        260,
+        2520
+      ],
+      "parameters": {
+        "httpMethod": "PATCH",
+        "path": "eventpass/inscripciones",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "eventpass-edit-registration"
+    },
+    {
+      "id": "0584af37-048e-46bc-942e-a21f915579e5",
+      "name": "ED · Autorización",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        2520
+      ],
+      "parameters": {
+        "jsCode": "return [{json:{headers:{authorization:String($input.first().json.headers?.authorization??'')}}}];"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "225c5fe7-cee0-4b2f-935a-0a55da63b7b0",
+      "name": "ED · Sesión",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        780,
+        2520
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "UwOk41MQnPHz9dxs",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "passThrough",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "4920ca74-94d7-4449-ad2f-5113455e8581",
+      "name": "ED · Validar entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        2520
+      ],
+      "parameters": {
+        "jsCode": "const a=$input.first().json;const q=$('ED · Webhook').first().json;const reject=(s,c,m)=>[{json:{continuar:false,status_http:s,respuesta:{ok:false,error:{codigo:c,mensaje:m}}}}];if(a.status_http!==200){if(![401,503].includes(a.status_http))throw Error('Autenticación inválida');return [{json:{continuar:false,status_http:a.status_http,respuesta:a.respuesta}}];}if(a.respuesta?.ok!==true||!a.respuesta.data?.usuario?.usuario_id)throw Error('Sesión incompleta');if(String(q.headers?.['content-type']??'').split(';')[0].trim()!=='application/json')return reject(415,'TIPO_CONTENIDO_NO_PERMITIDO','Envía JSON.');const b=q.body;if(Object.keys(q.query??{}).length||!b||Array.isArray(b)||typeof b!=='object'||Object.keys(b).some(k=>!['inscripcion_id','nombre_acreditacion','observaciones'].includes(k))||!/^INS-[a-f0-9]{32}$/.test(b.inscripcion_id??''))return reject(400,'SOLICITUD_INSCRIPCION_INVALIDA','Solicitud inválida.');return [{json:{continuar:true,usuario_id:a.respuesta.data.usuario.usuario_id,body:b}}];"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "44965999-ed4a-4eb9-b9c3-7d7cae8708ea",
+      "name": "ED · ¿Entrada válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1300,
+        2520
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1fe4adc7-b900-42ad-ad91-371f829e91f5",
+              "leftValue": "={{ $json.continuar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d78e1644-ea6f-4527-9051-7e277a4044ac",
+      "name": "ED · Buscar inscripción",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        0,
+        2800
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Inscripciones",
+          "mode": "name"
+        },
+        "options": {
+          "returnAllMatches": "returnAllMatches"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "inscripcion_id",
+              "lookupValue": "={{ $('ED · Validar entrada').first().json.body.inscripcion_id }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "4b7e1130-28ed-4f9e-8b37-64a88a1f6cab",
+      "name": "ED · Comprobar propietario",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        2800
+      ],
+      "parameters": {
+        "jsCode": "function rows(items){return items.map(x=>x.json??x).filter(x=>Object.entries(x).some(([k,v])=>k!=='row_number'&&v!==null&&v!==undefined&&String(v).trim()!==''));}\nfunction eventStart(e){\n const date=String(e.fecha??'').trim(),time=String(e.hora??'').trim();\n if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time))throw Error('Fecha de evento inválida');\n const ms=Date.parse(date+'T00:00:00Z');if(!Number.isFinite(ms)||new Date(ms).toISOString().slice(0,10)!==date)throw Error('Fecha inexistente');\n return Date.parse(date+'T'+time+':00-05:00');\n}\nfunction planPromotions(events, registrations, users, now){\n const activeUsers=new Set(users.filter(u=>u.estado==='ACTIVO').map(u=>u.usuario_id));\n const seen=new Set();for(const r of registrations){if(!r.inscripcion_id||seen.has(r.inscripcion_id))throw Error('Inscripciones duplicadas o incompletas');seen.add(r.inscripcion_id);}\n const result=[];\n for(const e of events){\n  if(e.estado!=='PUBLICADO'||eventStart(e)<=now)continue;\n  const capacity=Number(e.capacidad);if(!Number.isSafeInteger(capacity)||capacity<1)throw Error('Capacidad inválida');\n  const list=registrations.filter(r=>r.evento_id===e.evento_id);\n  const active=list.filter(r=>['CONFIRMADA','LISTA_ESPERA'].includes(r.estado));\n  if(new Set(active.map(r=>r.usuario_id)).size!==active.length)throw Error('Usuario con varias inscripciones activas');\n  const occupied=list.filter(r=>r.estado==='CONFIRMADA').length;\n  if(occupied>capacity)throw Error('Sobreaforo');\n  const waiting=list.filter(r=>r.estado==='LISTA_ESPERA'&&activeUsers.has(r.usuario_id));\n  for(const r of waiting)if(!Number.isFinite(Date.parse(r.fecha_inscripcion)))throw Error('Fecha de espera inválida');\n  waiting.sort((a,b)=>Date.parse(a.fecha_inscripcion)-Date.parse(b.fecha_inscripcion)||a.inscripcion_id.localeCompare(b.inscripcion_id));\n  for(const r of waiting.slice(0,capacity-occupied))result.push({evento:e,inscripcion:r});\n }\n return result;\n}\nfunction planReminders(events,registrations,records,now){\n const keys=new Set(records.map(r=>r.clave_idempotencia));const result=[];\n for(const e of events){if(e.estado!=='PUBLICADO')continue;const start=eventStart(e);if(start<=now||start>now+86400000)continue;\n  for(const r of registrations){if(r.evento_id!==e.evento_id||r.estado!=='CONFIRMADA')continue;const key=`${r.usuario_id}:${e.evento_id}:24H`;if(keys.has(key))continue;keys.add(key);result.push({evento:e,inscripcion:r,clave:key});}\n }return result;\n}\nfunction editRegistration(user,body,record,event,now){\n const fail=(status,code,message)=>({status,respuesta:{ok:false,error:{codigo:code,mensaje:message}}});\n if(!body||Array.isArray(body)||typeof body!=='object'||Object.keys(body).some(k=>!['inscripcion_id','nombre_acreditacion','observaciones'].includes(k)))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','La solicitud contiene campos no permitidos.');\n if(!/^INS-[a-f0-9]{32}$/.test(body.inscripcion_id??''))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','Identificador inválido.');\n if(!record||record.usuario_id!==user||record.inscripcion_id!==body.inscripcion_id)return fail(404,'INSCRIPCION_NO_ENCONTRADA','No se encontró la inscripción.');\n if(!['CONFIRMADA','LISTA_ESPERA'].includes(record.estado))return fail(409,'INSCRIPCION_NO_EDITABLE','La inscripción no está activa.');\n if(!event||event.evento_id!==record.evento_id)throw Error('Evento inconsistente');\n if(!['PUBLICADO','CERRADO'].includes(event.estado)||eventStart(event)<=now)return fail(409,'PLAZO_EDICION_FINALIZADO','El evento no permite editar esta inscripción.');\n const name=typeof body.nombre_acreditacion==='string'?body.nombre_acreditacion.trim():'';\n const notes=typeof body.observaciones==='string'?body.observaciones.trim():body.observaciones===undefined?String(record.observaciones??''):null;\n if([...name].length<2||[...name].length>100||/[\\u0000-\\u001f\\u007f]/.test(name)||notes===null||[...notes].length>500||/[\\u0000-\\u001f\\u007f]/.test(notes))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','Revisa el nombre de acreditación y las observaciones.');\n return {status:200,actualizacion:{inscripcion_id:record.inscripcion_id,nombre_acreditacion:name,observaciones:notes,fecha_actualizacion:new Date(now).toISOString()}};\n}\nconst x=$('ED · Validar entrada').first().json;const rs=rows($input.all());if(rs.length>1)throw Error('Inscripción duplicada');const r=rs[0];if(!r||r.usuario_id!==x.usuario_id)return [{json:{continuar:false,status_http:404,respuesta:{ok:false,error:{codigo:'INSCRIPCION_NO_ENCONTRADA',mensaje:'No se encontró la inscripción.'}}}}];return [{json:{continuar:true,inscripcion:r}}];"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "67a99a01-ab84-4794-b7cf-6d6431972c6b",
+      "name": "ED · ¿Propietario válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        520,
+        2800
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "970c6a97-c6d7-417a-93b0-c8ca8e379e16",
+              "leftValue": "={{ $json.continuar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "57227645-e799-4f99-ad88-f0eb1762ed76",
+      "name": "ED · Buscar evento",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        780,
+        2800
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1dMO2t9hHFzOJ5ItqBs7uvoTxXTGcndUTGJ9qOuNgqrM",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Eventos",
+          "mode": "name"
+        },
+        "options": {
+          "returnAllMatches": "returnAllMatches"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "evento_id",
+              "lookupValue": "={{ $('ED · Comprobar propietario').first().json.inscripcion.evento_id }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "dfeaa9e3-0f1a-46e6-a156-3bb38d5cb103",
+      "name": "ED · Preparar edición",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        2800
+      ],
+      "parameters": {
+        "jsCode": "function rows(items){return items.map(x=>x.json??x).filter(x=>Object.entries(x).some(([k,v])=>k!=='row_number'&&v!==null&&v!==undefined&&String(v).trim()!==''));}\nfunction eventStart(e){\n const date=String(e.fecha??'').trim(),time=String(e.hora??'').trim();\n if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time))throw Error('Fecha de evento inválida');\n const ms=Date.parse(date+'T00:00:00Z');if(!Number.isFinite(ms)||new Date(ms).toISOString().slice(0,10)!==date)throw Error('Fecha inexistente');\n return Date.parse(date+'T'+time+':00-05:00');\n}\nfunction planPromotions(events, registrations, users, now){\n const activeUsers=new Set(users.filter(u=>u.estado==='ACTIVO').map(u=>u.usuario_id));\n const seen=new Set();for(const r of registrations){if(!r.inscripcion_id||seen.has(r.inscripcion_id))throw Error('Inscripciones duplicadas o incompletas');seen.add(r.inscripcion_id);}\n const result=[];\n for(const e of events){\n  if(e.estado!=='PUBLICADO'||eventStart(e)<=now)continue;\n  const capacity=Number(e.capacidad);if(!Number.isSafeInteger(capacity)||capacity<1)throw Error('Capacidad inválida');\n  const list=registrations.filter(r=>r.evento_id===e.evento_id);\n  const active=list.filter(r=>['CONFIRMADA','LISTA_ESPERA'].includes(r.estado));\n  if(new Set(active.map(r=>r.usuario_id)).size!==active.length)throw Error('Usuario con varias inscripciones activas');\n  const occupied=list.filter(r=>r.estado==='CONFIRMADA').length;\n  if(occupied>capacity)throw Error('Sobreaforo');\n  const waiting=list.filter(r=>r.estado==='LISTA_ESPERA'&&activeUsers.has(r.usuario_id));\n  for(const r of waiting)if(!Number.isFinite(Date.parse(r.fecha_inscripcion)))throw Error('Fecha de espera inválida');\n  waiting.sort((a,b)=>Date.parse(a.fecha_inscripcion)-Date.parse(b.fecha_inscripcion)||a.inscripcion_id.localeCompare(b.inscripcion_id));\n  for(const r of waiting.slice(0,capacity-occupied))result.push({evento:e,inscripcion:r});\n }\n return result;\n}\nfunction planReminders(events,registrations,records,now){\n const keys=new Set(records.map(r=>r.clave_idempotencia));const result=[];\n for(const e of events){if(e.estado!=='PUBLICADO')continue;const start=eventStart(e);if(start<=now||start>now+86400000)continue;\n  for(const r of registrations){if(r.evento_id!==e.evento_id||r.estado!=='CONFIRMADA')continue;const key=`${r.usuario_id}:${e.evento_id}:24H`;if(keys.has(key))continue;keys.add(key);result.push({evento:e,inscripcion:r,clave:key});}\n }return result;\n}\nfunction editRegistration(user,body,record,event,now){\n const fail=(status,code,message)=>({status,respuesta:{ok:false,error:{codigo:code,mensaje:message}}});\n if(!body||Array.isArray(body)||typeof body!=='object'||Object.keys(body).some(k=>!['inscripcion_id','nombre_acreditacion','observaciones'].includes(k)))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','La solicitud contiene campos no permitidos.');\n if(!/^INS-[a-f0-9]{32}$/.test(body.inscripcion_id??''))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','Identificador inválido.');\n if(!record||record.usuario_id!==user||record.inscripcion_id!==body.inscripcion_id)return fail(404,'INSCRIPCION_NO_ENCONTRADA','No se encontró la inscripción.');\n if(!['CONFIRMADA','LISTA_ESPERA'].includes(record.estado))return fail(409,'INSCRIPCION_NO_EDITABLE','La inscripción no está activa.');\n if(!event||event.evento_id!==record.evento_id)throw Error('Evento inconsistente');\n if(!['PUBLICADO','CERRADO'].includes(event.estado)||eventStart(event)<=now)return fail(409,'PLAZO_EDICION_FINALIZADO','El evento no permite editar esta inscripción.');\n const name=typeof body.nombre_acreditacion==='string'?body.nombre_acreditacion.trim():'';\n const notes=typeof body.observaciones==='string'?body.observaciones.trim():body.observaciones===undefined?String(record.observaciones??''):null;\n if([...name].length<2||[...name].length>100||/[\\u0000-\\u001f\\u007f]/.test(name)||notes===null||[...notes].length>500||/[\\u0000-\\u001f\\u007f]/.test(notes))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','Revisa el nombre de acreditación y las observaciones.');\n return {status:200,actualizacion:{inscripcion_id:record.inscripcion_id,nombre_acreditacion:name,observaciones:notes,fecha_actualizacion:new Date(now).toISOString()}};\n}\nconst x=$('ED · Validar entrada').first().json;const old=$('ED · Comprobar propietario').first().json.inscripcion;const es=rows($input.all());if(es.length!==1)throw Error('Evento no único');const result=editRegistration(x.usuario_id,x.body,old,es[0],Date.now());if(!result.actualizacion)return [{json:{continuar:false,status_http:result.status,respuesta:result.respuesta}}];return [{json:{continuar:true,...result,anterior:old,auditoria:{auditoria_id:'AUD-EDIT-'+$execution.id,inscripcion_id:old.inscripcion_id,usuario_id:old.usuario_id,evento_id:old.evento_id,accion:'UPDATE',estado_anterior:old.estado,estado_nuevo:old.estado,fecha:result.actualizacion.fecha_actualizacion,resultado:'OK',detalle:'Actualización del nombre de acreditación y observaciones por el titular.'}}}];"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "7fe675ac-a768-4613-9347-ce225bcb26f6",
+      "name": "ED · ¿Guardar edición?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1300,
+        2800
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "dbd69f64-1a26-4ed7-8428-9da25965169d",
+              "leftValue": "={{ $json.continuar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "78c8ce41-678c-4507-8239-fef1aa40dd87",
+      "name": "ED · Guardar edición",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        0,
+        3080
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Inscripciones",
+          "mode": "name"
+        },
+        "options": {
+          "cellFormat": "RAW"
+        },
+        "operation": "update",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "inscripcion_id": "={{ $json.actualizacion.inscripcion_id }}",
+            "nombre_acreditacion": "={{ $json.actualizacion.nombre_acreditacion }}",
+            "observaciones": "={{ $json.actualizacion.observaciones }}",
+            "fecha_actualizacion": "={{ $json.actualizacion.fecha_actualizacion }}"
+          },
+          "matchingColumns": [
+            "inscripcion_id"
+          ],
+          "schema": [
+            {
+              "id": "inscripcion_id",
+              "displayName": "inscripcion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nombre_acreditacion",
+              "displayName": "nombre_acreditacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "observaciones",
+              "displayName": "observaciones",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_actualizacion",
+              "displayName": "fecha_actualizacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "executeOnce": false,
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "a7160ce2-7fca-42e4-9b15-4059af7f2de4",
+      "name": "ED · Releer edición",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        260,
+        3080
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Inscripciones",
+          "mode": "name"
+        },
+        "options": {
+          "returnAllMatches": "returnAllMatches"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "inscripcion_id",
+              "lookupValue": "={{ $('ED · Preparar edición').first().json.actualizacion.inscripcion_id }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "47d58c8d-cbee-4cc5-99d8-12dbbe07df67",
+      "name": "ED · Verificar edición",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        3080
+      ],
+      "parameters": {
+        "jsCode": "function rows(items){return items.map(x=>x.json??x).filter(x=>Object.entries(x).some(([k,v])=>k!=='row_number'&&v!==null&&v!==undefined&&String(v).trim()!==''));}\nfunction eventStart(e){\n const date=String(e.fecha??'').trim(),time=String(e.hora??'').trim();\n if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time))throw Error('Fecha de evento inválida');\n const ms=Date.parse(date+'T00:00:00Z');if(!Number.isFinite(ms)||new Date(ms).toISOString().slice(0,10)!==date)throw Error('Fecha inexistente');\n return Date.parse(date+'T'+time+':00-05:00');\n}\nfunction planPromotions(events, registrations, users, now){\n const activeUsers=new Set(users.filter(u=>u.estado==='ACTIVO').map(u=>u.usuario_id));\n const seen=new Set();for(const r of registrations){if(!r.inscripcion_id||seen.has(r.inscripcion_id))throw Error('Inscripciones duplicadas o incompletas');seen.add(r.inscripcion_id);}\n const result=[];\n for(const e of events){\n  if(e.estado!=='PUBLICADO'||eventStart(e)<=now)continue;\n  const capacity=Number(e.capacidad);if(!Number.isSafeInteger(capacity)||capacity<1)throw Error('Capacidad inválida');\n  const list=registrations.filter(r=>r.evento_id===e.evento_id);\n  const active=list.filter(r=>['CONFIRMADA','LISTA_ESPERA'].includes(r.estado));\n  if(new Set(active.map(r=>r.usuario_id)).size!==active.length)throw Error('Usuario con varias inscripciones activas');\n  const occupied=list.filter(r=>r.estado==='CONFIRMADA').length;\n  if(occupied>capacity)throw Error('Sobreaforo');\n  const waiting=list.filter(r=>r.estado==='LISTA_ESPERA'&&activeUsers.has(r.usuario_id));\n  for(const r of waiting)if(!Number.isFinite(Date.parse(r.fecha_inscripcion)))throw Error('Fecha de espera inválida');\n  waiting.sort((a,b)=>Date.parse(a.fecha_inscripcion)-Date.parse(b.fecha_inscripcion)||a.inscripcion_id.localeCompare(b.inscripcion_id));\n  for(const r of waiting.slice(0,capacity-occupied))result.push({evento:e,inscripcion:r});\n }\n return result;\n}\nfunction planReminders(events,registrations,records,now){\n const keys=new Set(records.map(r=>r.clave_idempotencia));const result=[];\n for(const e of events){if(e.estado!=='PUBLICADO')continue;const start=eventStart(e);if(start<=now||start>now+86400000)continue;\n  for(const r of registrations){if(r.evento_id!==e.evento_id||r.estado!=='CONFIRMADA')continue;const key=`${r.usuario_id}:${e.evento_id}:24H`;if(keys.has(key))continue;keys.add(key);result.push({evento:e,inscripcion:r,clave:key});}\n }return result;\n}\nfunction editRegistration(user,body,record,event,now){\n const fail=(status,code,message)=>({status,respuesta:{ok:false,error:{codigo:code,mensaje:message}}});\n if(!body||Array.isArray(body)||typeof body!=='object'||Object.keys(body).some(k=>!['inscripcion_id','nombre_acreditacion','observaciones'].includes(k)))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','La solicitud contiene campos no permitidos.');\n if(!/^INS-[a-f0-9]{32}$/.test(body.inscripcion_id??''))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','Identificador inválido.');\n if(!record||record.usuario_id!==user||record.inscripcion_id!==body.inscripcion_id)return fail(404,'INSCRIPCION_NO_ENCONTRADA','No se encontró la inscripción.');\n if(!['CONFIRMADA','LISTA_ESPERA'].includes(record.estado))return fail(409,'INSCRIPCION_NO_EDITABLE','La inscripción no está activa.');\n if(!event||event.evento_id!==record.evento_id)throw Error('Evento inconsistente');\n if(!['PUBLICADO','CERRADO'].includes(event.estado)||eventStart(event)<=now)return fail(409,'PLAZO_EDICION_FINALIZADO','El evento no permite editar esta inscripción.');\n const name=typeof body.nombre_acreditacion==='string'?body.nombre_acreditacion.trim():'';\n const notes=typeof body.observaciones==='string'?body.observaciones.trim():body.observaciones===undefined?String(record.observaciones??''):null;\n if([...name].length<2||[...name].length>100||/[\\u0000-\\u001f\\u007f]/.test(name)||notes===null||[...notes].length>500||/[\\u0000-\\u001f\\u007f]/.test(notes))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','Revisa el nombre de acreditación y las observaciones.');\n return {status:200,actualizacion:{inscripcion_id:record.inscripcion_id,nombre_acreditacion:name,observaciones:notes,fecha_actualizacion:new Date(now).toISOString()}};\n}\nconst x=$('ED · Preparar edición').first().json;const rs=rows($input.all());if(rs.length!==1)throw Error('Guardado no confirmado');for(const [k,v]of Object.entries(x.actualizacion))if(String(rs[0][k]??'')!==String(v))throw Error('Guardado no confirmado');for(const k of ['usuario_id','evento_id','estado','fecha_inscripcion','origen','orden_espera'])if(String(rs[0][k]??'')!==String(x.anterior[k]??''))throw Error('Cambió un campo protegido');return [{json:x.auditoria}];"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "5e3a340a-6d38-4731-bc2e-206874838569",
+      "name": "ED · Auditar edición",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        780,
+        3080
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Auditoria_Inscripciones",
+          "mode": "name"
+        },
+        "options": {
+          "cellFormat": "RAW"
+        },
+        "operation": "append",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "auditoria_id": "={{ $json.auditoria_id }}",
+            "inscripcion_id": "={{ $json.inscripcion_id }}",
+            "usuario_id": "={{ $json.usuario_id }}",
+            "evento_id": "={{ $json.evento_id }}",
+            "accion": "={{ $json.accion }}",
+            "estado_anterior": "={{ $json.estado_anterior }}",
+            "estado_nuevo": "={{ $json.estado_nuevo }}",
+            "fecha": "={{ $json.fecha }}",
+            "resultado": "={{ $json.resultado }}",
+            "detalle": "={{ $json.detalle }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "auditoria_id",
+              "displayName": "auditoria_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "inscripcion_id",
+              "displayName": "inscripcion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "evento_id",
+              "displayName": "evento_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "accion",
+              "displayName": "accion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado_anterior",
+              "displayName": "estado_anterior",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado_nuevo",
+              "displayName": "estado_nuevo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resultado",
+              "displayName": "resultado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "executeOnce": false,
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "a9e9f128-826a-432a-969a-2411ddcad569",
+      "name": "ED · Respuesta editada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        3080
+      ],
+      "parameters": {
+        "jsCode": "const x=$('ED · Preparar edición').first().json;const y=$input.first().json;if(y.auditoria_id!==x.auditoria.auditoria_id)throw Error('Auditoría no confirmada');return [{json:{status_http:200,respuesta:{ok:true,mensaje:'Inscripción actualizada.',data:{...x.actualizacion,evento_id:x.anterior.evento_id,estado:x.anterior.estado}}}}];"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "8acdfce9-a6c0-4f33-aaa9-bb7cfcb16ae1",
+      "name": "ED · Responder",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1300,
+        3080
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.respuesta }}",
+        "options": {
+          "responseCode": "={{ $json.status_http }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "885ed4f2-f40d-448b-b13c-21922168e435",
+      "name": "AV · INSCRIPCION",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        3360
+      ],
+      "parameters": {
+        "jsCode": "const r=$('Preparar respuesta de inscripción creada').first().json.respuesta;if(r?.ok!==true)return [];const d=r.data;return [{json:{usuario_id:$('Validar solicitud de inscripción').first().json.datos.usuario_id,evento_id:d.evento_id,inscripcion_id:d.inscripcion_id,tipo:'INSCRIPCION',titulo:'EventPass · '+r.mensaje,mensaje:r.mensaje+' Evento: '+d.evento_id+'. Estado: '+d.estado+'.',clave_idempotencia:'INSCRIPCION:'+d.inscripcion_id+':'+(d.fecha_actualizacion??d.fecha_inscripcion??'')}}];"
+      }
+    },
+    {
+      "id": "74a1f69a-4c87-4a74-a291-0654ca2d67db",
+      "name": "AV · INSCRIPCION enviar",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        260,
+        3360
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "EP09Notificacion",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "passThrough",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "1be9713d-5019-4656-97d2-9fd5a7890b2c",
+      "name": "AV · CANCELACION",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        3360
+      ],
+      "parameters": {
+        "jsCode": "const r=$('Preparar respuesta de cancelación').first().json.respuesta;if(r?.ok!==true)return [];const d=r.data;return [{json:{usuario_id:$('Preparar cancelación de inscripción').first().json.datos.usuario_id,evento_id:d.evento_id,inscripcion_id:d.inscripcion_id,tipo:'CANCELACION',titulo:'EventPass · '+r.mensaje,mensaje:r.mensaje+' Evento: '+d.evento_id+'. Estado: '+d.estado+'.',clave_idempotencia:'CANCELACION:'+d.inscripcion_id+':'+(d.fecha_actualizacion??d.fecha_inscripcion??'')}}];"
+      }
+    },
+    {
+      "id": "69b8f4ec-1d68-41a8-ac28-d37589bee533",
+      "name": "AV · CANCELACION enviar",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        780,
+        3360
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "EP09Notificacion",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "passThrough",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "8545dab6-cc4b-4bbf-913c-b01ba99e8095",
+      "name": "AV · ACTUALIZACION",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        3360
+      ],
+      "parameters": {
+        "jsCode": "const r=$('ED · Respuesta editada').first().json.respuesta;if(r?.ok!==true)return [];const d=r.data;return [{json:{usuario_id:$('ED · Validar entrada').first().json.usuario_id,evento_id:d.evento_id,inscripcion_id:d.inscripcion_id,tipo:'ACTUALIZACION',titulo:'EventPass · '+r.mensaje,mensaje:r.mensaje+' Evento: '+d.evento_id+'. Estado: '+d.estado+'.',clave_idempotencia:'ACTUALIZACION:'+d.inscripcion_id+':'+(d.fecha_actualizacion??d.fecha_inscripcion??'')}}];"
+      }
+    },
+    {
+      "id": "6f1a1b16-239b-488d-9fd5-35ba67495651",
+      "name": "AV · ACTUALIZACION enviar",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1300,
+        3360
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "EP09Notificacion",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "passThrough",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Webhook - Crear inscripción": {
+      "main": [
+        [
+          {
+            "node": "Preparar autenticación de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar autenticación de inscripción": {
+      "main": [
+        [
+          {
+            "node": "Autenticar inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Autenticar inscripción": {
+      "main": [
+        [
+          {
+            "node": "Validar solicitud de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar solicitud de inscripción": {
+      "main": [
+        [
+          {
+            "node": "¿Solicitud de inscripción válida?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder validación inicial de inscripción": {
+      "main": [
+        []
+      ]
+    },
+    "¿Solicitud de inscripción válida?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Telegram para inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder validación inicial de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Telegram para inscripción": {
+      "main": [
+        [
+          {
+            "node": "Validar Telegram para inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Telegram para inscripción": {
+      "main": [
+        [
+          {
+            "node": "¿Telegram válido para inscripción?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Telegram válido para inscripción?": {
+      "main": [
+        [
+          {
+            "node": "Buscar evento para inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder validación inicial de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar evento para inscripción": {
+      "main": [
+        [
+          {
+            "node": "Validar evento para inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar evento para inscripción": {
+      "main": [
+        [
+          {
+            "node": "¿Evento válido para inscripción?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Evento válido para inscripción?": {
+      "main": [
+        [
+          {
+            "node": "Leer inscripciones para disponibilidad",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder validación inicial de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer inscripciones para disponibilidad": {
+      "main": [
+        [
+          {
+            "node": "Evaluar duplicado y cupos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluar duplicado y cupos": {
+      "main": [
+        [
+          {
+            "node": "¿Puede crear inscripción?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Puede crear inscripción?": {
+      "main": [
+        [
+          {
+            "node": "Preparar nueva inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder validación inicial de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar nueva inscripción": {
+      "main": [
+        [
+          {
+            "node": "¿Guardar nueva inscripción?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Guardar nueva inscripción?": {
+      "main": [
+        [
+          {
+            "node": "Guardar nueva inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder validación inicial de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar nueva inscripción": {
+      "main": [
+        [
+          {
+            "node": "Preparar auditoría de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder guardado no confirmado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar auditoría de inscripción": {
+      "main": [
+        [
+          {
+            "node": "Guardar auditoría de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder guardado no confirmado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar auditoría de inscripción": {
+      "main": [
+        [
+          {
+            "node": "Preparar respuesta de inscripción creada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder guardado no confirmado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar respuesta de inscripción creada": {
+      "main": [
+        [
+          {
+            "node": "Responder inscripción creada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder guardado no confirmado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder inscripción creada": {
+      "main": [
+        [
+          {
+            "node": "AV · INSCRIPCION",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Consultar mis inscripciones": {
+      "main": [
+        [
+          {
+            "node": "Preparar autenticación de consulta de inscripciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar autenticación de consulta de inscripciones": {
+      "main": [
+        [
+          {
+            "node": "Autenticar consulta de inscripciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Autenticar consulta de inscripciones": {
+      "main": [
+        [
+          {
+            "node": "Validar sesión para consultar inscripciones",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de consulta de inscripciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar sesión para consultar inscripciones": {
+      "main": [
+        [
+          {
+            "node": "¿Sesión válida para consultar inscripciones?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de consulta de inscripciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Sesión válida para consultar inscripciones?": {
+      "main": [
+        [
+          {
+            "node": "Buscar inscripciones del usuario",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder consulta de inscripciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar inscripciones del usuario": {
+      "main": [
+        [
+          {
+            "node": "Preparar listado de mis inscripciones",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de consulta de inscripciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar listado de mis inscripciones": {
+      "main": [
+        [
+          {
+            "node": "Responder consulta de inscripciones",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de consulta de inscripciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Cancelar inscripción": {
+      "main": [
+        [
+          {
+            "node": "Preparar autenticación de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar autenticación de cancelación": {
+      "main": [
+        [
+          {
+            "node": "Autenticar cancelación de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Autenticar cancelación de inscripción": {
+      "main": [
+        [
+          {
+            "node": "Validar solicitud de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar solicitud de cancelación": {
+      "main": [
+        [
+          {
+            "node": "¿Solicitud de cancelación válida?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Solicitud de cancelación válida?": {
+      "main": [
+        [
+          {
+            "node": "Buscar inscripción para cancelar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder validación de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar inscripción para cancelar": {
+      "main": [
+        [
+          {
+            "node": "Validar inscripción para cancelar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar inscripción para cancelar": {
+      "main": [
+        [
+          {
+            "node": "¿Inscripción válida para cancelar?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Inscripción válida para cancelar?": {
+      "main": [
+        [
+          {
+            "node": "Buscar evento para cancelar inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder validación de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar evento para cancelar inscripción": {
+      "main": [
+        [
+          {
+            "node": "Validar evento para cancelar inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar evento para cancelar inscripción": {
+      "main": [
+        [
+          {
+            "node": "¿Evento permite cancelar inscripción?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Evento permite cancelar inscripción?": {
+      "main": [
+        [
+          {
+            "node": "Preparar cancelación de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder validación de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar cancelación de inscripción": {
+      "main": [
+        [
+          {
+            "node": "¿Guardar cancelación de inscripción?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Guardar cancelación de inscripción?": {
+      "main": [
+        [
+          {
+            "node": "Guardar cancelación de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder validación de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar cancelación de inscripción": {
+      "main": [
+        [
+          {
+            "node": "Verificar inscripción cancelada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder cancelación no confirmada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar inscripción cancelada": {
+      "main": [
+        [
+          {
+            "node": "Preparar auditoría de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder cancelación no confirmada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar auditoría de cancelación": {
+      "main": [
+        [
+          {
+            "node": "Guardar auditoría de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder cancelación no confirmada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar auditoría de cancelación": {
+      "main": [
+        [
+          {
+            "node": "Preparar respuesta de cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder cancelación no confirmada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar respuesta de cancelación": {
+      "main": [
+        [
+          {
+            "node": "Responder inscripción cancelada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder cancelación no confirmada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder inscripción cancelada": {
+      "main": [
+        [
+          {
+            "node": "AV · CANCELACION",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · Webhook": {
+      "main": [
+        [
+          {
+            "node": "ED · Autorización",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · Autorización": {
+      "main": [
+        [
+          {
+            "node": "ED · Sesión",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · Sesión": {
+      "main": [
+        [
+          {
+            "node": "ED · Validar entrada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · Validar entrada": {
+      "main": [
+        [
+          {
+            "node": "ED · ¿Entrada válida?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · ¿Entrada válida?": {
+      "main": [
+        [
+          {
+            "node": "ED · Buscar inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ED · Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · Buscar inscripción": {
+      "main": [
+        [
+          {
+            "node": "ED · Comprobar propietario",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · Comprobar propietario": {
+      "main": [
+        [
+          {
+            "node": "ED · ¿Propietario válido?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · ¿Propietario válido?": {
+      "main": [
+        [
+          {
+            "node": "ED · Buscar evento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ED · Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · Buscar evento": {
+      "main": [
+        [
+          {
+            "node": "ED · Preparar edición",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · Preparar edición": {
+      "main": [
+        [
+          {
+            "node": "ED · ¿Guardar edición?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · ¿Guardar edición?": {
+      "main": [
+        [
+          {
+            "node": "ED · Guardar edición",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ED · Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · Guardar edición": {
+      "main": [
+        [
+          {
+            "node": "ED · Releer edición",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder guardado no confirmado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · Releer edición": {
+      "main": [
+        [
+          {
+            "node": "ED · Verificar edición",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder guardado no confirmado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · Verificar edición": {
+      "main": [
+        [
+          {
+            "node": "ED · Auditar edición",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder guardado no confirmado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · Auditar edición": {
+      "main": [
+        [
+          {
+            "node": "ED · Respuesta editada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder guardado no confirmado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ED · Respuesta editada": {
+      "main": [
+        [
+          {
+            "node": "ED · Responder",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AV · ACTUALIZACION",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder guardado no confirmado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AV · INSCRIPCION": {
+      "main": [
+        [
+          {
+            "node": "AV · INSCRIPCION enviar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AV · CANCELACION": {
+      "main": [
+        [
+          {
+            "node": "AV · CANCELACION enviar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AV · ACTUALIZACION": {
+      "main": [
+        [
+          {
+            "node": "AV · ACTUALIZACION enviar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "7aa1d69b-6aed-455f-8074-91c467ce6ef5",
+  "activeVersionId": "7aa1d69b-6aed-455f-8074-91c467ce6ef5",
+  "versionCounter": 435,
+  "triggerCount": 4,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-10-10T13:07:31.505Z",
+      "createdAt": "2026-10-10T13:07:31.505Z",
+      "role": "workflow:owner",
+      "workflowId": "YaDPteajrJaHPH62",
+      "projectId": "Io2OgvxqX2dWHxpm",
+      "project": {
+        "updatedAt": "2026-09-24T01:24:55.210Z",
+        "createdAt": "2026-09-23T02:09:17.501Z",
+        "id": "Io2OgvxqX2dWHxpm",
+        "name": "Fabian Enrique Uribe Rodriguez <computo.forencics795@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "e48cb428-b9d8-43e1-bbf7-b44932bdd1cb"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

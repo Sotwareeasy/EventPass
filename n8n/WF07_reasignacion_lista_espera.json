@@ -1,0 +1,975 @@
+{
+  "updatedAt": "2026-10-11T14:13:28.985Z",
+  "createdAt": "2026-10-11T05:03:57.804Z",
+  "id": "EP07Reasignacion",
+  "name": "WF07_reasignacion_lista_espera",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "f82e9270-5d9f-47e7-abf6-4c5a2005abd3",
+      "name": "Cada cinco minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d2a809e2-7975-4e42-877f-5cee8fba1dec",
+      "name": "Leer eventos",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1dMO2t9hHFzOJ5ItqBs7uvoTxXTGcndUTGJ9qOuNgqrM",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Eventos",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "retryOnFail": false
+    },
+    {
+      "id": "c0f784e4-c829-4f85-9971-f856035bcb14",
+      "name": "Leer inscripciones",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Inscripciones",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "retryOnFail": false
+    },
+    {
+      "id": "6beacd6e-d1f9-4119-b826-62ecf1850313",
+      "name": "Leer usuarios",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        780,
+        0
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1wDCApChPdPMJPXE5JDfocuToN3xmraWq1sCVFBHtQb0",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Usuarios",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "retryOnFail": false
+    },
+    {
+      "id": "133c0f4e-c81d-4545-bdea-f49329e78ed0",
+      "name": "Leer reasignaciones",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1040,
+        0
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1AbjggsXKTHZbgmBD3j-5blCSA7feqGK6vpLsBQjCOGc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Reasignaciones",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "retryOnFail": false
+    },
+    {
+      "id": "bb7712f8-a3e6-4f63-bc6d-ee12a1c38f6a",
+      "name": "Seleccionar promoción FIFO",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        0
+      ],
+      "parameters": {
+        "jsCode": "function rows(items){return items.map(x=>x.json??x).filter(x=>Object.entries(x).some(([k,v])=>k!=='row_number'&&v!==null&&v!==undefined&&String(v).trim()!==''));}\nfunction eventStart(e){\n const date=String(e.fecha??'').trim(),time=String(e.hora??'').trim();\n if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time))throw Error('Fecha de evento inválida');\n const ms=Date.parse(date+'T00:00:00Z');if(!Number.isFinite(ms)||new Date(ms).toISOString().slice(0,10)!==date)throw Error('Fecha inexistente');\n return Date.parse(date+'T'+time+':00-05:00');\n}\nfunction planPromotions(events, registrations, users, now){\n const activeUsers=new Set(users.filter(u=>u.estado==='ACTIVO').map(u=>u.usuario_id));\n const seen=new Set();for(const r of registrations){if(!r.inscripcion_id||seen.has(r.inscripcion_id))throw Error('Inscripciones duplicadas o incompletas');seen.add(r.inscripcion_id);}\n const result=[];\n for(const e of events){\n  if(e.estado!=='PUBLICADO'||eventStart(e)<=now)continue;\n  const capacity=Number(e.capacidad);if(!Number.isSafeInteger(capacity)||capacity<1)throw Error('Capacidad inválida');\n  const list=registrations.filter(r=>r.evento_id===e.evento_id);\n  const active=list.filter(r=>['CONFIRMADA','LISTA_ESPERA'].includes(r.estado));\n  if(new Set(active.map(r=>r.usuario_id)).size!==active.length)throw Error('Usuario con varias inscripciones activas');\n  const occupied=list.filter(r=>r.estado==='CONFIRMADA').length;\n  if(occupied>capacity)throw Error('Sobreaforo');\n  const waiting=list.filter(r=>r.estado==='LISTA_ESPERA'&&activeUsers.has(r.usuario_id));\n  for(const r of waiting)if(!Number.isFinite(Date.parse(r.fecha_inscripcion)))throw Error('Fecha de espera inválida');\n  waiting.sort((a,b)=>Date.parse(a.fecha_inscripcion)-Date.parse(b.fecha_inscripcion)||a.inscripcion_id.localeCompare(b.inscripcion_id));\n  for(const r of waiting.slice(0,capacity-occupied))result.push({evento:e,inscripcion:r});\n }\n return result;\n}\nfunction planReminders(events,registrations,records,now){\n const keys=new Set(records.map(r=>r.clave_idempotencia));const result=[];\n for(const e of events){if(e.estado!=='PUBLICADO')continue;const start=eventStart(e);if(start<=now||start>now+86400000)continue;\n  for(const r of registrations){if(r.evento_id!==e.evento_id||r.estado!=='CONFIRMADA')continue;const key=`${r.usuario_id}:${e.evento_id}:24H`;if(keys.has(key))continue;keys.add(key);result.push({evento:e,inscripcion:r,clave:key});}\n }return result;\n}\nfunction editRegistration(user,body,record,event,now){\n const fail=(status,code,message)=>({status,respuesta:{ok:false,error:{codigo:code,mensaje:message}}});\n if(!body||Array.isArray(body)||typeof body!=='object'||Object.keys(body).some(k=>!['inscripcion_id','nombre_acreditacion','observaciones'].includes(k)))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','La solicitud contiene campos no permitidos.');\n if(!/^INS-[a-f0-9]{32}$/.test(body.inscripcion_id??''))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','Identificador inválido.');\n if(!record||record.usuario_id!==user||record.inscripcion_id!==body.inscripcion_id)return fail(404,'INSCRIPCION_NO_ENCONTRADA','No se encontró la inscripción.');\n if(!['CONFIRMADA','LISTA_ESPERA'].includes(record.estado))return fail(409,'INSCRIPCION_NO_EDITABLE','La inscripción no está activa.');\n if(!event||event.evento_id!==record.evento_id)throw Error('Evento inconsistente');\n if(!['PUBLICADO','CERRADO'].includes(event.estado)||eventStart(event)<=now)return fail(409,'PLAZO_EDICION_FINALIZADO','El evento no permite editar esta inscripción.');\n const name=typeof body.nombre_acreditacion==='string'?body.nombre_acreditacion.trim():'';\n const notes=typeof body.observaciones==='string'?body.observaciones.trim():body.observaciones===undefined?String(record.observaciones??''):null;\n if([...name].length<2||[...name].length>100||/[\\u0000-\\u001f\\u007f]/.test(name)||notes===null||[...notes].length>500||/[\\u0000-\\u001f\\u007f]/.test(notes))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','Revisa el nombre de acreditación y las observaciones.');\n return {status:200,actualizacion:{inscripcion_id:record.inscripcion_id,nombre_acreditacion:name,observaciones:notes,fecha_actualizacion:new Date(now).toISOString()}};\n}\n\nconst logs=rows($input.all());const registrations=rows($('Leer inscripciones').all());\n// Una reserva inconclusa requiere revisión antes de promover de nuevo el mismo evento.\nconst locked=new Set(logs.filter(r=>r.resultado_notificacion==='RESERVADA').map(r=>r.evento_id));\nconst candidates=planPromotions(rows($('Leer eventos').all()).filter(e=>!locked.has(e.evento_id)),registrations,rows($('Leer usuarios').all()),Date.now());\nconst chosen=candidates.find(c=>!logs.some(l=>l.inscripcion_id===c.inscripcion.inscripcion_id));if(!chosen)return [];\nconst {evento:e,inscripcion:r}=chosen;return [{json:{reasignacion_id:'REA-'+r.inscripcion_id,evento_id:e.evento_id,inscripcion_id:r.inscripcion_id,usuario_id:r.usuario_id,fecha:new Date().toISOString(),orden_lista:r.orden_espera??'',estado_anterior:'LISTA_ESPERA',estado_nuevo:'CONFIRMADA',resultado_notificacion:'RESERVADA'}}];"
+      }
+    },
+    {
+      "id": "fd5775b7-6474-4c48-9c49-61a0de860469",
+      "name": "Reservar reasignación",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        0,
+        280
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1AbjggsXKTHZbgmBD3j-5blCSA7feqGK6vpLsBQjCOGc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Reasignaciones",
+          "mode": "name"
+        },
+        "options": {
+          "cellFormat": "RAW"
+        },
+        "operation": "append",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reasignacion_id": "={{ $json.reasignacion_id }}",
+            "evento_id": "={{ $json.evento_id }}",
+            "inscripcion_id": "={{ $json.inscripcion_id }}",
+            "usuario_id": "={{ $json.usuario_id }}",
+            "fecha": "={{ $json.fecha }}",
+            "orden_lista": "={{ $json.orden_lista }}",
+            "estado_anterior": "={{ $json.estado_anterior }}",
+            "estado_nuevo": "={{ $json.estado_nuevo }}",
+            "resultado_notificacion": "={{ $json.resultado_notificacion }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "reasignacion_id",
+              "displayName": "reasignacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "evento_id",
+              "displayName": "evento_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "inscripcion_id",
+              "displayName": "inscripcion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "orden_lista",
+              "displayName": "orden_lista",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado_anterior",
+              "displayName": "estado_anterior",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado_nuevo",
+              "displayName": "estado_nuevo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resultado_notificacion",
+              "displayName": "resultado_notificacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "executeOnce": false,
+      "alwaysOutputData": true,
+      "retryOnFail": false
+    },
+    {
+      "id": "acf83fbe-ebe2-4c55-b434-c8798466f5b4",
+      "name": "Promover inscripción",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        260,
+        280
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Inscripciones",
+          "mode": "name"
+        },
+        "options": {
+          "cellFormat": "RAW"
+        },
+        "operation": "update",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "inscripcion_id": "={{ $('Seleccionar promoción FIFO').first().json.inscripcion_id }}",
+            "estado": "CONFIRMADA",
+            "fecha_actualizacion": "={{ $('Seleccionar promoción FIFO').first().json.fecha }}"
+          },
+          "matchingColumns": [
+            "inscripcion_id"
+          ],
+          "schema": [
+            {
+              "id": "inscripcion_id",
+              "displayName": "inscripcion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_actualizacion",
+              "displayName": "fecha_actualizacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "executeOnce": false,
+      "alwaysOutputData": true,
+      "retryOnFail": false
+    },
+    {
+      "id": "5bcbbb2c-abe8-414f-9c68-a3637392a008",
+      "name": "Releer promoción",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        520,
+        280
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Inscripciones",
+          "mode": "name"
+        },
+        "options": {
+          "returnAllMatches": "returnAllMatches"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "inscripcion_id",
+              "lookupValue": "={{ $('Seleccionar promoción FIFO').first().json.inscripcion_id }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "retryOnFail": false
+    },
+    {
+      "id": "b8d2cbe9-0e9d-4427-8533-2b64412057f2",
+      "name": "Verificar promoción",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        280
+      ],
+      "parameters": {
+        "jsCode": "function rows(items){return items.map(x=>x.json??x).filter(x=>Object.entries(x).some(([k,v])=>k!=='row_number'&&v!==null&&v!==undefined&&String(v).trim()!==''));}\nfunction eventStart(e){\n const date=String(e.fecha??'').trim(),time=String(e.hora??'').trim();\n if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time))throw Error('Fecha de evento inválida');\n const ms=Date.parse(date+'T00:00:00Z');if(!Number.isFinite(ms)||new Date(ms).toISOString().slice(0,10)!==date)throw Error('Fecha inexistente');\n return Date.parse(date+'T'+time+':00-05:00');\n}\nfunction planPromotions(events, registrations, users, now){\n const activeUsers=new Set(users.filter(u=>u.estado==='ACTIVO').map(u=>u.usuario_id));\n const seen=new Set();for(const r of registrations){if(!r.inscripcion_id||seen.has(r.inscripcion_id))throw Error('Inscripciones duplicadas o incompletas');seen.add(r.inscripcion_id);}\n const result=[];\n for(const e of events){\n  if(e.estado!=='PUBLICADO'||eventStart(e)<=now)continue;\n  const capacity=Number(e.capacidad);if(!Number.isSafeInteger(capacity)||capacity<1)throw Error('Capacidad inválida');\n  const list=registrations.filter(r=>r.evento_id===e.evento_id);\n  const active=list.filter(r=>['CONFIRMADA','LISTA_ESPERA'].includes(r.estado));\n  if(new Set(active.map(r=>r.usuario_id)).size!==active.length)throw Error('Usuario con varias inscripciones activas');\n  const occupied=list.filter(r=>r.estado==='CONFIRMADA').length;\n  if(occupied>capacity)throw Error('Sobreaforo');\n  const waiting=list.filter(r=>r.estado==='LISTA_ESPERA'&&activeUsers.has(r.usuario_id));\n  for(const r of waiting)if(!Number.isFinite(Date.parse(r.fecha_inscripcion)))throw Error('Fecha de espera inválida');\n  waiting.sort((a,b)=>Date.parse(a.fecha_inscripcion)-Date.parse(b.fecha_inscripcion)||a.inscripcion_id.localeCompare(b.inscripcion_id));\n  for(const r of waiting.slice(0,capacity-occupied))result.push({evento:e,inscripcion:r});\n }\n return result;\n}\nfunction planReminders(events,registrations,records,now){\n const keys=new Set(records.map(r=>r.clave_idempotencia));const result=[];\n for(const e of events){if(e.estado!=='PUBLICADO')continue;const start=eventStart(e);if(start<=now||start>now+86400000)continue;\n  for(const r of registrations){if(r.evento_id!==e.evento_id||r.estado!=='CONFIRMADA')continue;const key=`${r.usuario_id}:${e.evento_id}:24H`;if(keys.has(key))continue;keys.add(key);result.push({evento:e,inscripcion:r,clave:key});}\n }return result;\n}\nfunction editRegistration(user,body,record,event,now){\n const fail=(status,code,message)=>({status,respuesta:{ok:false,error:{codigo:code,mensaje:message}}});\n if(!body||Array.isArray(body)||typeof body!=='object'||Object.keys(body).some(k=>!['inscripcion_id','nombre_acreditacion','observaciones'].includes(k)))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','La solicitud contiene campos no permitidos.');\n if(!/^INS-[a-f0-9]{32}$/.test(body.inscripcion_id??''))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','Identificador inválido.');\n if(!record||record.usuario_id!==user||record.inscripcion_id!==body.inscripcion_id)return fail(404,'INSCRIPCION_NO_ENCONTRADA','No se encontró la inscripción.');\n if(!['CONFIRMADA','LISTA_ESPERA'].includes(record.estado))return fail(409,'INSCRIPCION_NO_EDITABLE','La inscripción no está activa.');\n if(!event||event.evento_id!==record.evento_id)throw Error('Evento inconsistente');\n if(!['PUBLICADO','CERRADO'].includes(event.estado)||eventStart(event)<=now)return fail(409,'PLAZO_EDICION_FINALIZADO','El evento no permite editar esta inscripción.');\n const name=typeof body.nombre_acreditacion==='string'?body.nombre_acreditacion.trim():'';\n const notes=typeof body.observaciones==='string'?body.observaciones.trim():body.observaciones===undefined?String(record.observaciones??''):null;\n if([...name].length<2||[...name].length>100||/[\\u0000-\\u001f\\u007f]/.test(name)||notes===null||[...notes].length>500||/[\\u0000-\\u001f\\u007f]/.test(notes))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','Revisa el nombre de acreditación y las observaciones.');\n return {status:200,actualizacion:{inscripcion_id:record.inscripcion_id,nombre_acreditacion:name,observaciones:notes,fecha_actualizacion:new Date(now).toISOString()}};\n}\nconst x=$('Seleccionar promoción FIFO').first().json;const r=rows($input.all());if(r.length!==1||r[0].estado!=='CONFIRMADA'||r[0].usuario_id!==x.usuario_id||r[0].fecha_actualizacion!==x.fecha)throw Error('Promoción no confirmada');return [{json:{...x,resultado_notificacion:'PENDIENTE'}}];"
+      }
+    },
+    {
+      "id": "6bce4926-f84e-4358-a4ac-17903b25713f",
+      "name": "Confirmar reasignación",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1040,
+        280
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1AbjggsXKTHZbgmBD3j-5blCSA7feqGK6vpLsBQjCOGc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Reasignaciones",
+          "mode": "name"
+        },
+        "options": {
+          "cellFormat": "RAW"
+        },
+        "operation": "update",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reasignacion_id": "={{ $json.reasignacion_id }}",
+            "evento_id": "={{ $json.evento_id }}",
+            "inscripcion_id": "={{ $json.inscripcion_id }}",
+            "usuario_id": "={{ $json.usuario_id }}",
+            "fecha": "={{ $json.fecha }}",
+            "orden_lista": "={{ $json.orden_lista }}",
+            "estado_anterior": "={{ $json.estado_anterior }}",
+            "estado_nuevo": "={{ $json.estado_nuevo }}",
+            "resultado_notificacion": "={{ $json.resultado_notificacion }}"
+          },
+          "matchingColumns": [
+            "reasignacion_id"
+          ],
+          "schema": [
+            {
+              "id": "reasignacion_id",
+              "displayName": "reasignacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "evento_id",
+              "displayName": "evento_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "inscripcion_id",
+              "displayName": "inscripcion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "orden_lista",
+              "displayName": "orden_lista",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado_anterior",
+              "displayName": "estado_anterior",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado_nuevo",
+              "displayName": "estado_nuevo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resultado_notificacion",
+              "displayName": "resultado_notificacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "executeOnce": false,
+      "alwaysOutputData": true,
+      "retryOnFail": false
+    },
+    {
+      "id": "07edf90d-2308-414f-bc3b-0ae80de51c81",
+      "name": "Preparar aviso de cupo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        280
+      ],
+      "parameters": {
+        "jsCode": "const x=$('Seleccionar promoción FIFO').first().json;return [{json:{usuario_id:x.usuario_id,evento_id:x.evento_id,inscripcion_id:x.inscripcion_id,tipo:'REASIGNACION',titulo:'Tu cupo está confirmado',mensaje:'Tu inscripción en '+x.evento_id+' pasó de lista de espera a CONFIRMADA. Consulta tu agenda en EventPass.',clave_idempotencia:x.reasignacion_id}}];"
+      }
+    },
+    {
+      "id": "05dd3921-cdbf-44cc-980b-db6e63e3f44f",
+      "name": "Notificar reasignación",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        560
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "EP09Notificacion",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "passThrough",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "1b5d5e79-24bd-4072-beac-1392d39754d8",
+      "name": "Resultado de reasignación",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        560
+      ],
+      "parameters": {
+        "jsCode": "const x=$('Seleccionar promoción FIFO').first().json;const r=$input.first().json;return [{json:{...x,resultado_notificacion:r.gmail_estado==='ENVIADO'&&r.telegram_estado==='ENVIADO'?'ENVIADO':'REVISAR'}}];"
+      }
+    },
+    {
+      "id": "023b0a21-163a-474b-ad4c-ef1efc7ff448",
+      "name": "Guardar resultado de reasignación",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        520,
+        560
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1AbjggsXKTHZbgmBD3j-5blCSA7feqGK6vpLsBQjCOGc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Reasignaciones",
+          "mode": "name"
+        },
+        "options": {
+          "cellFormat": "RAW"
+        },
+        "operation": "update",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reasignacion_id": "={{ $json.reasignacion_id }}",
+            "evento_id": "={{ $json.evento_id }}",
+            "inscripcion_id": "={{ $json.inscripcion_id }}",
+            "usuario_id": "={{ $json.usuario_id }}",
+            "fecha": "={{ $json.fecha }}",
+            "orden_lista": "={{ $json.orden_lista }}",
+            "estado_anterior": "={{ $json.estado_anterior }}",
+            "estado_nuevo": "={{ $json.estado_nuevo }}",
+            "resultado_notificacion": "={{ $json.resultado_notificacion }}"
+          },
+          "matchingColumns": [
+            "reasignacion_id"
+          ],
+          "schema": [
+            {
+              "id": "reasignacion_id",
+              "displayName": "reasignacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "evento_id",
+              "displayName": "evento_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "inscripcion_id",
+              "displayName": "inscripcion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usuario_id",
+              "displayName": "usuario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "orden_lista",
+              "displayName": "orden_lista",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado_anterior",
+              "displayName": "estado_anterior",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado_nuevo",
+              "displayName": "estado_nuevo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resultado_notificacion",
+              "displayName": "resultado_notificacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "executeOnce": false,
+      "alwaysOutputData": true,
+      "retryOnFail": false
+    }
+  ],
+  "connections": {
+    "Cada cinco minutos": {
+      "main": [
+        [
+          {
+            "node": "Leer eventos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer eventos": {
+      "main": [
+        [
+          {
+            "node": "Leer inscripciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer inscripciones": {
+      "main": [
+        [
+          {
+            "node": "Leer usuarios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer usuarios": {
+      "main": [
+        [
+          {
+            "node": "Leer reasignaciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer reasignaciones": {
+      "main": [
+        [
+          {
+            "node": "Seleccionar promoción FIFO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seleccionar promoción FIFO": {
+      "main": [
+        [
+          {
+            "node": "Reservar reasignación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reservar reasignación": {
+      "main": [
+        [
+          {
+            "node": "Promover inscripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Promover inscripción": {
+      "main": [
+        [
+          {
+            "node": "Releer promoción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Releer promoción": {
+      "main": [
+        [
+          {
+            "node": "Verificar promoción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar promoción": {
+      "main": [
+        [
+          {
+            "node": "Confirmar reasignación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmar reasignación": {
+      "main": [
+        [
+          {
+            "node": "Preparar aviso de cupo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar aviso de cupo": {
+      "main": [
+        [
+          {
+            "node": "Notificar reasignación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notificar reasignación": {
+      "main": [
+        [
+          {
+            "node": "Resultado de reasignación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado de reasignación": {
+      "main": [
+        [
+          {
+            "node": "Guardar resultado de reasignación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": {
+    "node:Cada cinco minutos": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "2c525ad3-ed95-4432-b47c-86a1b249d409",
+  "activeVersionId": "2c525ad3-ed95-4432-b47c-86a1b249d409",
+  "versionCounter": 2,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-10-11T05:03:57.804Z",
+      "createdAt": "2026-10-11T05:03:57.804Z",
+      "role": "workflow:owner",
+      "workflowId": "EP07Reasignacion",
+      "projectId": "Io2OgvxqX2dWHxpm",
+      "project": {
+        "updatedAt": "2026-09-24T01:24:55.210Z",
+        "createdAt": "2026-09-23T02:09:17.501Z",
+        "id": "Io2OgvxqX2dWHxpm",
+        "name": "Fabian Enrique Uribe Rodriguez <computo.forencics795@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "e48cb428-b9d8-43e1-bbf7-b44932bdd1cb"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

@@ -1,9 +1,15 @@
 {
-  "name": "Webhook - Desactivar mi cuenta",
+  "updatedAt": "2026-10-11T14:16:28.323Z",
+  "createdAt": "2026-10-10T01:45:17.724Z",
+  "id": "2Z27WtyQZxcwOw7O",
+  "name": "Webhook - Actualizar mi perfil",
+  "description": null,
+  "active": true,
+  "isArchived": false,
   "nodes": [
     {
       "parameters": {
-        "httpMethod": "DELETE",
+        "httpMethod": "PATCH",
         "path": "eventpass/usuarios/me",
         "responseMode": "responseNode",
         "options": {}
@@ -11,12 +17,12 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        -288,
-        -64
+        0,
+        0
       ],
-      "id": "ed44fdeb-13b6-4f2a-b870-3abd760fbfce",
-      "name": "Webhook - Desactivar mi cuenta",
-      "webhookId": "ed45fbba-f718-46cc-a70f-bd8bb6be988c"
+      "id": "4254ce2d-0f15-40a8-9902-961569e5daf6",
+      "name": "Webhook - Actualizar mi perfil",
+      "webhookId": "41f81f89-b42b-4ed7-80a0-db3f5e3ddc3c"
     },
     {
       "parameters": {
@@ -25,11 +31,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -64,
-        -64
+        224,
+        0
       ],
-      "id": "418ad534-3dd2-42c4-acbc-4d3dfc40ddba",
-      "name": "Preparar autenticación de desactivación"
+      "id": "b5a161a2-f029-4087-a8e0-6ebb01c07b26",
+      "name": "Preparar autenticación de actualización"
     },
     {
       "parameters": {
@@ -55,25 +61,25 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        160,
-        -64
+        448,
+        0
       ],
-      "id": "e2a61b14-2f81-42a3-8320-7bb6928ae97b",
-      "name": "Autenticar desactivación",
+      "id": "aa44e018-6995-4711-a174-ce6392f69c14",
+      "name": "Autenticar actualización de perfil",
       "onError": "continueErrorOutput"
     },
     {
       "parameters": {
-        "jsCode": "const autenticacion = $input.first().json;\n\nif (![200, 401, 503].includes(autenticacion.status_http)) {\n  throw new Error('La autenticación devolvió un resultado inesperado.');\n}\n\nif (autenticacion.status_http !== 200) {\n  return [{\n    json: {\n      desactivar: false,\n      status_http: autenticacion.status_http,\n      respuesta: autenticacion.respuesta,\n    },\n  }];\n}\n\nconst usuario = autenticacion.respuesta?.data?.usuario;\n\nif (autenticacion.respuesta?.ok !== true || !usuario?.usuario_id) {\n  throw new Error('No se obtuvo un usuario autenticado válido.');\n}\n\nconst solicitud = $('Webhook - Desactivar mi cuenta').first().json;\n\nconst contentType = String(\n  solicitud.headers?.['content-type'] ?? ''\n).split(';')[0].trim().toLowerCase();\n\nconst cuerpo = solicitud.body;\n\nconst confirmacionValida =\n  cuerpo !== null &&\n  typeof cuerpo === 'object' &&\n  !Array.isArray(cuerpo) &&\n  Object.keys(cuerpo).length === 1 &&\n  cuerpo.confirmacion === 'DESACTIVAR';\n\nif (contentType !== 'application/json' || !confirmacionValida) {\n  return [{\n    json: {\n      desactivar: false,\n      status_http: contentType !== 'application/json' ? 415 : 400,\n      respuesta: {\n        ok: false,\n        error: {\n          codigo: 'CONFIRMACION_INVALIDA',\n          mensaje: 'Envía un objeto JSON con confirmacion igual a DESACTIVAR.',\n        },\n      },\n    },\n  }];\n}\n\nconst ahora = new Date().toISOString();\n\nreturn [{\n  json: {\n    desactivar: true,\n    status_http: 200,\n\n    // La cuenta objetivo procede exclusivamente de la sesión.\n    usuario_id: usuario.usuario_id,\n    estado: 'INACTIVO',\n    fecha_actualizacion: ahora,\n\n    auditoria: {\n      auditoria_id: `AUD-USR-DEACTIVATE-${$execution.id}`,\n      usuario_id: usuario.usuario_id,\n      accion: 'DEACTIVATE',\n      fecha: ahora,\n      resultado: 'EXITO',\n      detalle: JSON.stringify({\n        estado_anterior: 'ACTIVO',\n        estado_nuevo: 'INACTIVO',\n        origen: 'PERFIL_AUTENTICADO',\n      }),\n    },\n\n    respuesta: {\n      ok: true,\n      mensaje: 'Tu cuenta fue desactivada.',\n    },\n  },\n}];"
+        "jsCode": "const autenticacion = $input.first().json;\n\n// Una sesión inválida o un fallo técnico no permiten modificar datos.\nif (![200, 401, 503].includes(autenticacion.status_http)) {\n  throw new Error('La autenticación devolvió un resultado inesperado.');\n}\n\nif (autenticacion.status_http !== 200) {\n  return [{\n    json: {\n      actualizar: false,\n      status_http: autenticacion.status_http,\n      respuesta: autenticacion.respuesta,\n    },\n  }];\n}\n\nconst usuario = autenticacion.respuesta?.data?.usuario;\n\nif (autenticacion.respuesta?.ok !== true || !usuario?.usuario_id) {\n  throw new Error('No se obtuvo un usuario autenticado válido.');\n}\n\n// Recuperamos el cuerpo original, que no enviamos al subworkflow.\nconst solicitud = $('Webhook - Actualizar mi perfil').first().json;\n\nconst contentType = String(\n  solicitud.headers?.['content-type'] ?? ''\n).split(';')[0].trim().toLowerCase();\n\nconst cuerpo = solicitud.body;\n\nconst esObjeto =\n  cuerpo !== null &&\n  typeof cuerpo === 'object' &&\n  !Array.isArray(cuerpo);\n\nconst datos = esObjeto ? cuerpo : {};\nconst errores = [];\n\nif (!esObjeto) {\n  errores.push('El cuerpo debe ser un objeto JSON.');\n}\n\nif (Object.keys(datos).some(campo => campo !== 'nombre')) {\n  errores.push('Esta operación solo permite actualizar el nombre.');\n}\n\nconst nombre = typeof datos.nombre === 'string'\n  ? datos.nombre.trim()\n  : '';\n\nif (\n  nombre.length < 2 ||\n  nombre.length > 100 ||\n  /[\\u0000-\\u001f\\u007f]/.test(nombre)\n) {\n  errores.push('El nombre debe tener entre 2 y 100 caracteres válidos.');\n}\n\nif (contentType !== 'application/json') {\n  errores.push('Envía el cuerpo con Content-Type application/json.');\n}\n\nif (errores.length > 0) {\n  return [{\n    json: {\n      actualizar: false,\n      status_http: contentType !== 'application/json' ? 415 : 400,\n      respuesta: {\n        ok: false,\n        error: {\n          codigo: 'ACTUALIZACION_INVALIDA',\n          mensaje: 'Revisa los datos del perfil.',\n          detalles: errores,\n        },\n      },\n    },\n  }];\n}\n\nconst hayCambios = nombre !== usuario.nombre;\nconst ahora = new Date().toISOString();\n\nreturn [{\n  json: {\n    actualizar: hayCambios,\n    status_http: 200,\n\n    // El ID proviene de la sesión, nunca del cuerpo de la solicitud.\n    usuario_id: usuario.usuario_id,\n    nombre,\n    fecha_actualizacion: ahora,\n\n    auditoria: {\n      auditoria_id: `AUD-USR-UPDATE-${$execution.id}`,\n      usuario_id: usuario.usuario_id,\n      accion: 'UPDATE',\n      fecha: ahora,\n      resultado: 'EXITO',\n      detalle: JSON.stringify({\n        campo: 'nombre',\n        anterior: usuario.nombre,\n        nuevo: nombre,\n        origen: 'PERFIL_AUTENTICADO',\n      }),\n    },\n\n    respuesta: {\n      ok: true,\n      cambios_realizados: hayCambios,\n      data: {\n        usuario: {\n          usuario_id: usuario.usuario_id,\n          nombre,\n          email: usuario.email,\n          estado: 'ACTIVO',\n        },\n      },\n    },\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        384,
-        -160
+        672,
+        -96
       ],
-      "id": "839728e8-c331-4b40-b720-e6a6bcc348df",
-      "name": "Preparar desactivación de cuenta",
+      "id": "3915538a-8c01-4a40-9fcc-1008e482976a",
+      "name": "Preparar actualización de perfil",
       "onError": "continueErrorOutput"
     },
     {
@@ -87,8 +93,8 @@
           },
           "conditions": [
             {
-              "id": "3ce3170e-6ece-4e21-8638-30690f0a583f",
-              "leftValue": "={{ $json.desactivar }}",
+              "id": "03e5f8e2-08e7-4725-bdc9-9c0ba668de2b",
+              "leftValue": "={{ $json.actualizar }}",
               "rightValue": "",
               "operator": {
                 "type": "boolean",
@@ -104,11 +110,11 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        544,
-        -288
+        896,
+        -160
       ],
-      "id": "4d1c0fdb-ada9-46b7-b213-c45d439617b0",
-      "name": "¿Desactivar cuenta?"
+      "id": "a657bf6e-b3f7-4329-9007-f10d651cdf73",
+      "name": "¿Actualizar nombre?"
     },
     {
       "parameters": {
@@ -131,7 +137,7 @@
           "mappingMode": "defineBelow",
           "value": {
             "usuario_id": "={{ $json.usuario_id }}",
-            "estado": "={{ $json.estado }}",
+            "nombre": "={{ $json.nombre }}",
             "fecha_actualizacion": "={{ $json.fecha_actualizacion }}"
           },
           "matchingColumns": [
@@ -155,8 +161,7 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": true
+              "canBeUsedToMatch": true
             },
             {
               "id": "email_normalizado",
@@ -195,7 +200,8 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": true
             },
             {
               "id": "fecha_registro",
@@ -238,11 +244,11 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        768,
-        -336
+        1040,
+        -304
       ],
-      "id": "1916c277-208c-41d8-9560-34891f0216ad",
-      "name": "Desactivar usuario",
+      "id": "23d8453a-a69b-46e0-8908-a9f9747c07b1",
+      "name": "Guardar nombre de perfil",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "jzVSx4ibnSlPFZiO",
@@ -271,12 +277,12 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "auditoria_id": "={{ $('Preparar desactivación de cuenta').first().json.auditoria.auditoria_id }}",
-            "usuario_id": "={{ $('Preparar desactivación de cuenta').first().json.auditoria.usuario_id }}",
-            "accion": "={{ $('Preparar desactivación de cuenta').first().json.auditoria.accion }}",
-            "fecha": "={{ $('Preparar desactivación de cuenta').first().json.auditoria.fecha }}",
-            "resultado": "={{ $('Preparar desactivación de cuenta').first().json.auditoria.resultado }}",
-            "detalle": "={{ $('Preparar desactivación de cuenta').first().json.auditoria.detalle }}"
+            "auditoria_id": "={{ $('Preparar actualización de perfil').first().json.auditoria.auditoria_id }}",
+            "usuario_id": "={{ $('Preparar actualización de perfil').first().json.auditoria.usuario_id }}",
+            "accion": "={{ $('Preparar actualización de perfil').first().json.auditoria.accion }}",
+            "fecha": "={{ $('Preparar actualización de perfil').first().json.auditoria.fecha }}",
+            "resultado": "={{ $('Preparar actualización de perfil').first().json.auditoria.resultado }}",
+            "detalle": "={{ $('Preparar actualización de perfil').first().json.auditoria.detalle }}"
           },
           "matchingColumns": [],
           "schema": [
@@ -345,11 +351,11 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        1024,
-        -336
+        1328,
+        -112
       ],
-      "id": "bf6368ea-623f-4c06-b251-41ef3e9bdc9e",
-      "name": "Registrar auditoría de desactivación",
+      "id": "8ab3fb13-9eb8-499a-a0d9-72c6c3ca30e3",
+      "name": "Registrar auditoría de perfil",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "jzVSx4ibnSlPFZiO",
@@ -361,9 +367,9 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ $('Preparar desactivación de cuenta').first().json.respuesta }}",
+        "responseBody": "={{ $('Preparar actualización de perfil').first().json.respuesta }}",
         "options": {
-          "responseCode": "={{ $('Preparar desactivación de cuenta').first().json.status_http }}",
+          "responseCode": "={{ $('Preparar actualización de perfil').first().json.status_http }}",
           "responseHeaders": {
             "entries": [
               {
@@ -377,159 +383,190 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        1280,
+        1584,
         -400
       ],
-      "id": "c29dfd02-2d06-400a-b8a1-25e32341b085",
-      "name": "Responder desactivación"
+      "id": "8793153b-3987-4e0a-b093-ad60c5b23dd0",
+      "name": "Responder actualización de perfil"
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\n  \"ok\": false,\n  \"error\": {\n    \"codigo\": \"DESACTIVACION_NO_COMPLETADA\",\n    \"mensaje\": \"No fue posible completar la operación de desactivación.\"\n  }\n}",
-        "options": {}
+        "responseBody": "={\n  \"ok\": false,\n  \"error\": {\n    \"codigo\": \"ACTUALIZACION_NO_COMPLETADA\",\n    \"mensaje\": \"No fue posible completar la actualización del perfil.\"\n  }\n}",
+        "options": {
+          "responseCode": 503,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
       },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        768,
-        128
+        1312,
+        192
       ],
-      "id": "079934b3-36f0-4288-b70a-79660445805e",
-      "name": "Responder error de desactivación"
+      "id": "67dacd04-e7ec-4348-a1e6-e9c82b1d4fa0",
+      "name": "Responder error de actualización de perfil"
     }
   ],
-  "pinData": {},
   "connections": {
-    "Webhook - Desactivar mi cuenta": {
+    "Webhook - Actualizar mi perfil": {
       "main": [
         [
           {
-            "node": "Preparar autenticación de desactivación",
+            "node": "Preparar autenticación de actualización",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Preparar autenticación de desactivación": {
+    "Preparar autenticación de actualización": {
       "main": [
         [
           {
-            "node": "Autenticar desactivación",
+            "node": "Autenticar actualización de perfil",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Autenticar desactivación": {
+    "Autenticar actualización de perfil": {
       "main": [
         [
           {
-            "node": "Preparar desactivación de cuenta",
+            "node": "Preparar actualización de perfil",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Responder error de desactivación",
+            "node": "Responder error de actualización de perfil",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Preparar desactivación de cuenta": {
+    "Preparar actualización de perfil": {
       "main": [
         [
           {
-            "node": "¿Desactivar cuenta?",
+            "node": "¿Actualizar nombre?",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Responder error de desactivación",
+            "node": "Responder error de actualización de perfil",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "¿Desactivar cuenta?": {
+    "¿Actualizar nombre?": {
       "main": [
         [
           {
-            "node": "Desactivar usuario",
+            "node": "Guardar nombre de perfil",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Responder error de desactivación",
+            "node": "Responder actualización de perfil",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Desactivar usuario": {
+    "Guardar nombre de perfil": {
       "main": [
         [
           {
-            "node": "Registrar auditoría de desactivación",
+            "node": "Registrar auditoría de perfil",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Responder error de desactivación",
+            "node": "Responder error de actualización de perfil",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Registrar auditoría de desactivación": {
+    "Registrar auditoría de perfil": {
       "main": [
         [
           {
-            "node": "Responder desactivación",
+            "node": "Responder actualización de perfil",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Responder error de desactivación",
+            "node": "Responder error de actualización de perfil",
             "type": "main",
             "index": 0
           }
         ]
-      ]
-    },
-    "Responder desactivación": {
-      "main": [
-        []
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "d5d19028-d2d1-4963-8055-7b69936536b1",
+  "staticData": null,
   "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+    "templateCredsSetupCompleted": true
   },
   "nodeGroups": [],
-  "id": "u0DIHUqh5Il6XRW7",
-  "tags": []
+  "pinData": {},
+  "versionId": "0532ff9e-575c-4049-980b-96dfaa4d910a",
+  "activeVersionId": "0532ff9e-575c-4049-980b-96dfaa4d910a",
+  "versionCounter": 77,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-10-10T01:45:17.724Z",
+      "createdAt": "2026-10-10T01:45:17.724Z",
+      "role": "workflow:owner",
+      "workflowId": "2Z27WtyQZxcwOw7O",
+      "projectId": "Io2OgvxqX2dWHxpm",
+      "project": {
+        "updatedAt": "2026-09-24T01:24:55.210Z",
+        "createdAt": "2026-09-23T02:09:17.501Z",
+        "id": "Io2OgvxqX2dWHxpm",
+        "name": "Fabian Enrique Uribe Rodriguez <computo.forencics795@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "e48cb428-b9d8-43e1-bbf7-b44932bdd1cb"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
 }

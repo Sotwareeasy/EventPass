@@ -1,0 +1,15 @@
+{
+  "EP07_Reasignaciones": {
+    "Reasignaciones": "reasignacion_id evento_id inscripcion_id usuario_id fecha orden_lista estado_anterior estado_nuevo resultado_notificacion"
+  },
+  "EP08_Recordatorios": {
+    "Recordatorios": "recordatorio_id usuario_id evento_id inscripcion_id tipo_recordatorio fecha_programada fecha_envio estado clave_idempotencia"
+  },
+  "EP09_Notificaciones": {
+    "Notificaciones": "notificacion_id usuario_id tipo titulo mensaje evento_id inscripcion_id fecha gmail_estado telegram_estado gmail_error telegram_error clave_idempotencia"
+  },
+  "EP10_Soporte": {
+    "Conversaciones": "conversation_id usuario_id visitor_id fecha_inicio fecha_ultima_interaccion estado",
+    "Mensajes": "message_id conversation_id usuario_id visitor_id rol mensaje timestamp"
+  }
+}

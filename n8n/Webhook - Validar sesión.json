@@ -1,6 +1,28 @@
 {
-  "name": "SW_validar_sesion",
+  "updatedAt": "2026-10-11T14:16:38.839Z",
+  "createdAt": "2026-10-09T20:57:06.719Z",
+  "id": "bkD0flUFsZPmiMcq",
+  "name": "Webhook - Validar sesión",
+  "description": null,
+  "active": true,
+  "isArchived": false,
   "nodes": [
+    {
+      "parameters": {
+        "path": "eventpass/auth/sesion",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -576,
+        32
+      ],
+      "id": "b546ddf5-55a1-4103-94a8-22b00f9eb23d",
+      "name": "Webhook - Validar sesión",
+      "webhookId": "e7a49493-0928-46f6-8f59-8502c828f54b"
+    },
     {
       "parameters": {
         "jsCode": "const solicitud = $input.first().json;\n\nconst encabezado = typeof solicitud.headers?.authorization === 'string'\n  ? solicitud.headers.authorization.trim()\n  : '';\n\n// Aceptamos el formato exacto del token generado por nuestro login.\nconst coincidencia = /^Bearer (ep_[A-Za-z0-9_-]{43})$/i.exec(encabezado);\n\nif (!coincidencia) {\n  return [{\n    json: {\n      continuar: false,\n      status_http: 401,\n      respuesta: {\n        ok: false,\n        error: {\n          codigo: 'SESION_INVALIDA',\n          mensaje: 'Inicia sesión para continuar.',\n        },\n      },\n    },\n  }];\n}\n\nconst crypto = require('crypto');\n\n// No cambiamos mayúsculas ni minúsculas del token.\nconst token = coincidencia[1];\n\nconst huella = crypto\n  .createHash('sha256')\n  .update(token, 'utf8')\n  .digest('hex');\n\nreturn [{\n  json: {\n    continuar: true,\n    session_token: `sha256:${huella}`,\n  },\n}];"
@@ -8,12 +30,37 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -976,
-        -480
+        176,
+        -128
       ],
-      "id": "06d26358-09cf-476a-bafc-5206c3c5bc50",
+      "id": "b62b300f-1c7a-4760-b7e2-7fd6c10203a1",
       "name": "Preparar validación de sesión",
       "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"ok\":false,\"error\":{\"codigo\":\"AUTENTICACION_NO_DISPONIBLE\",\"mensaje\":\"No fue posible validar la sesión.\"}}",
+        "options": {
+          "responseCode": 503,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        464,
+        256
+      ],
+      "id": "a1d00358-0f29-48f7-a8b2-d2f60ce3654b",
+      "name": "Responder error de login"
     },
     {
       "parameters": {
@@ -43,11 +90,93 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        -720,
-        -480
+        448,
+        -96
       ],
-      "id": "8c02057d-0f4d-44db-aef4-7ddffcf4934c",
+      "id": "557316f7-b5ac-45d0-9be9-f03c0a32b942",
       "name": "¿Formato de token válido?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.respuesta }}",
+        "options": {
+          "responseCode": "={{ $json.status_http }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2592,
+        352
+      ],
+      "id": "aac0340d-79fb-4ea7-9c12-06d66118d563",
+      "name": "Responder validación de sesión"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1nRY-I6R6rbzAv-fo75wqL44tjNVykq3KVdOc1RdRVtY",
+          "mode": "list",
+          "cachedResultName": "EP02_Sesiones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1nRY-I6R6rbzAv-fo75wqL44tjNVykq3KVdOc1RdRVtY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sesiones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1nRY-I6R6rbzAv-fo75wqL44tjNVykq3KVdOc1RdRVtY/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "session_token",
+              "lookupValue": "={{ $json.session_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        -544
+      ],
+      "id": "5497ad32-7f91-42cc-a626-b5da6f5d0b8b",
+      "name": "Buscar sesión",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const filas = $input.all()\n  .map(item => item.json)\n  .filter(fila => Object.keys(fila).length > 0);\n\nif (filas.length > 1) {\n  throw new Error('Se encontraron varias sesiones con la misma huella.');\n}\n\nconst sesion = filas[0] ?? null;\nlet continuar = false;\nlet marcarExpirada = false;\n\nif (sesion) {\n  const huellaEsperada = $('Preparar validación de sesión')\n    .first().json.session_token;\n\n  if (\n    !sesion.session_id ||\n    !sesion.usuario_id ||\n    sesion.session_token !== huellaEsperada ||\n    !['ACTIVA', 'CERRADA', 'EXPIRADA'].includes(sesion.estado)\n  ) {\n    throw new Error('El registro de sesión es inconsistente.');\n  }\n\n  const expiracion = Date.parse(sesion.expira_en);\n\n  if (!Number.isFinite(expiracion)) {\n    throw new Error('La sesión tiene una fecha de expiración inválida.');\n  }\n\n  const vencida = expiracion <= Date.now();\n\n  // Solo marcamos las sesiones que todavía figuran como activas.\n  marcarExpirada =\n    sesion.estado === 'ACTIVA' &&\n    !sesion.cerrada_en &&\n    vencida;\n\n  continuar =\n    sesion.estado === 'ACTIVA' &&\n    !sesion.cerrada_en &&\n    !vencida;\n}\n\nreturn [{\n  json: {\n    continuar,\n    marcar_expirada: marcarExpirada,\n\n    // Se utiliza internamente para actualizar la fila.\n    session_id: sesion?.session_id ?? null,\n\n    // Solo las sesiones vigentes pasan a la consulta del usuario.\n    sesion: continuar ? sesion : null,\n\n    status_http: 401,\n    respuesta: {\n      ok: false,\n      error: {\n        codigo: 'SESION_INVALIDA',\n        mensaje: 'Inicia sesión para continuar.',\n      },\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -416
+      ],
+      "id": "fb0149dc-f6e4-4b52-bb7d-a8039aeb78ee",
+      "name": "Evaluar sesión",
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -77,10 +206,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        368,
-        -512
+        1280,
+        -16
       ],
-      "id": "46084dca-6f6c-4f87-a9cb-74745fcb4705",
+      "id": "74a8208d-a704-49e4-a60c-3661c6325e82",
       "name": "¿Sesión vigente?"
     },
     {
@@ -112,10 +241,10 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        -672,
-        96
+        1168,
+        -288
       ],
-      "id": "2efddb5b-30b0-4cb0-9734-27ce1b0fee61",
+      "id": "d36962b2-4ab2-493f-a978-72eee477cb78",
       "name": "Buscar usuario de sesión",
       "alwaysOutputData": true,
       "credentials": {
@@ -133,10 +262,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -256,
-        -16
+        1520,
+        -320
       ],
-      "id": "7c10e70a-0c3c-443a-bbf8-4a3a31bad803",
+      "id": "aa8ae65c-894e-4cf1-b4c6-054260d3e6d9",
       "name": "Validar usuario de sesión",
       "onError": "continueErrorOutput"
     },
@@ -168,10 +297,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        512,
-        -176
+        1744,
+        -304
       ],
-      "id": "60c1cd7d-4997-47f6-9a08-9905dbd38a2a",
+      "id": "2923709c-c286-44d5-9788-502bee9b6e28",
       "name": "¿Usuario de sesión válido?"
     },
     {
@@ -302,10 +431,10 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        864,
-        -640
+        1968,
+        -304
       ],
-      "id": "6a91d2ff-b8a5-4c65-ac8a-5a3abf4e8db7",
+      "id": "3d2fc85f-c420-4071-9e09-61efc89eaf54",
       "name": "Actualizar última validación",
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -322,10 +451,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1168,
-        -640
+        2192,
+        -304
       ],
-      "id": "78c80526-ed76-490e-8739-749aefaf559e",
+      "id": "e999cfe8-23a7-4b17-9bdb-eea5dfea9883",
       "name": "Preparar respuesta de sesión"
     },
     {
@@ -356,10 +485,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        400,
-        144
+        1504,
+        80
       ],
-      "id": "0d3c687f-c27d-4d9b-b5c1-a259ce0621a6",
+      "id": "97bef6d5-efa2-4d8d-b881-4d07a265afa6",
       "name": "¿Marcar sesión expirada?"
     },
     {
@@ -490,10 +619,10 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        848,
-        112
+        2032,
+        -64
       ],
-      "id": "2d81e190-2df8-44a5-acfc-b1610461ad6b",
+      "id": "3ab38ce0-0715-4e43-a12e-5653488ea08f",
       "name": "Marcar sesión expirada",
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -510,111 +639,69 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1472,
-        -176
+        2256,
+        -160
       ],
-      "id": "ee06cc16-adf9-4549-87ff-51fb9d6b95ee",
+      "id": "c13e57e2-3ba8-462d-b28b-f871e4782c22",
       "name": "Preparar respuesta de sesión expirada"
     },
     {
       "parameters": {
-        "documentId": {
-          "__rl": true,
-          "value": "1nRY-I6R6rbzAv-fo75wqL44tjNVykq3KVdOc1RdRVtY",
-          "mode": "list",
-          "cachedResultName": "EP02_Sesiones",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1nRY-I6R6rbzAv-fo75wqL44tjNVykq3KVdOc1RdRVtY/edit?usp=drivesdk"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "gid=0",
-          "mode": "list",
-          "cachedResultName": "Sesiones",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1nRY-I6R6rbzAv-fo75wqL44tjNVykq3KVdOc1RdRVtY/edit#gid=0"
-        },
-        "filtersUI": {
-          "values": [
-            {
-              "lookupColumn": "session_token",
-              "lookupValue": "={{ $json.session_token }}"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "const solicitud = $input.first().json;\n\nreturn [{\n  json: {\n    headers: {\n      authorization:\n        typeof solicitud.headers?.authorization === 'string'\n          ? solicitud.headers.authorization\n          : '',\n    },\n  },\n}];"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        -528,
-        -608
+        -336,
+        48
       ],
-      "id": "b9952eb2-1a4f-4a29-835d-ffba488c2c8c",
-      "name": "Buscar sesión",
-      "alwaysOutputData": true,
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "jzVSx4ibnSlPFZiO",
-          "name": "Google Sheets account"
+      "id": "00d3dab9-5e05-48f5-b229-7f5bf0c3b1e2",
+      "name": "Preparar llamada de validación"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "UwOk41MQnPHz9dxs",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/UwOk41MQnPHz9dxs",
+          "cachedResultName": "SW_validar_sesion"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
         }
       },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -144,
+        32
+      ],
+      "id": "20583c3f-13be-480e-9e34-482f6b22cc0c",
+      "name": "Ejecutar validación compartida",
       "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "const filas = $input.all()\n  .map(item => item.json)\n  .filter(fila => Object.keys(fila).length > 0);\n\nif (filas.length > 1) {\n  throw new Error('Se encontraron varias sesiones con la misma huella.');\n}\n\nconst sesion = filas[0] ?? null;\nlet continuar = false;\nlet marcarExpirada = false;\n\nif (sesion) {\n  const huellaEsperada = $('Preparar validación de sesión')\n    .first().json.session_token;\n\n  if (\n    !sesion.session_id ||\n    !sesion.usuario_id ||\n    sesion.session_token !== huellaEsperada ||\n    !['ACTIVA', 'CERRADA', 'EXPIRADA'].includes(sesion.estado)\n  ) {\n    throw new Error('El registro de sesión es inconsistente.');\n  }\n\n  const expiracion = Date.parse(sesion.expira_en);\n\n  if (!Number.isFinite(expiracion)) {\n    throw new Error('La sesión tiene una fecha de expiración inválida.');\n  }\n\n  const vencida = expiracion <= Date.now();\n\n  // Solo marcamos las sesiones que todavía figuran como activas.\n  marcarExpirada =\n    sesion.estado === 'ACTIVA' &&\n    !sesion.cerrada_en &&\n    vencida;\n\n  continuar =\n    sesion.estado === 'ACTIVA' &&\n    !sesion.cerrada_en &&\n    !vencida;\n}\n\nreturn [{\n  json: {\n    continuar,\n    marcar_expirada: marcarExpirada,\n\n    // Se utiliza internamente para actualizar la fila.\n    session_id: sesion?.session_id ?? null,\n\n    // Solo las sesiones vigentes pasan a la consulta del usuario.\n    sesion: continuar ? sesion : null,\n\n    status_http: 401,\n    respuesta: {\n      ok: false,\n      error: {\n        codigo: 'SESION_INVALIDA',\n        mensaje: 'Inicia sesión para continuar.',\n      },\n    },\n  },\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -160,
-        -640
-      ],
-      "id": "2bad9460-f877-459b-8981-a5f5de6e9416",
-      "name": "Evaluar sesión",
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "inputSource": "passthrough"
-      },
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1.2,
-      "position": [
-        -1120,
-        -128
-      ],
-      "id": "20ad4d9c-f87d-44df-9367-716d5553a9a0",
-      "name": "Execute Sub-workflow Trigger"
-    },
-    {
-      "parameters": {
-        "jsCode": "const resultado = $input.first().json;\n\nreturn [{\n  json: {\n    status_http: resultado.status_http,\n    respuesta: resultado.respuesta,\n  },\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1504,
-        -496
-      ],
-      "id": "59d8f993-df97-4a00-a0df-7455b42d6090",
-      "name": "Devolver validación"
-    },
-    {
-      "parameters": {
-        "jsCode": "return [{\n  json: {\n    status_http: 503,\n    respuesta: {\n      ok: false,\n      error: {\n        codigo: 'AUTENTICACION_NO_DISPONIBLE',\n        mensaje: 'No fue posible comprobar la sesión.',\n      },\n    },\n  },\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -64,
-        -288
-      ],
-      "id": "3a765ea6-14e2-4f81-8a19-029a1462b5a7",
-      "name": "Preparar error de autenticación"
     }
   ],
-  "pinData": {},
   "connections": {
+    "Webhook - Validar sesión": {
+      "main": [
+        [
+          {
+            "node": "Preparar llamada de validación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Preparar validación de sesión": {
       "main": [
         [
@@ -626,7 +713,72 @@
         ],
         [
           {
-            "node": "Preparar error de autenticación",
+            "node": "Responder error de login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Formato de token válido?": {
+      "main": [
+        [
+          {
+            "node": "Buscar sesión",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder validación de sesión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder validación de sesión": {
+      "main": [
+        [
+          {
+            "node": "Responder error de login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar sesión": {
+      "main": [
+        [
+          {
+            "node": "Evaluar sesión",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluar sesión": {
+      "main": [
+        [
+          {
+            "node": "¿Sesión vigente?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de login",
             "type": "main",
             "index": 0
           }
@@ -662,7 +814,7 @@
         ],
         [
           {
-            "node": "Preparar error de autenticación",
+            "node": "Responder error de login",
             "type": "main",
             "index": 0
           }
@@ -680,7 +832,7 @@
         ],
         [
           {
-            "node": "Preparar error de autenticación",
+            "node": "Responder error de login",
             "type": "main",
             "index": 0
           }
@@ -698,7 +850,7 @@
         ],
         [
           {
-            "node": "Devolver validación",
+            "node": "Responder validación de sesión",
             "type": "main",
             "index": 0
           }
@@ -716,7 +868,18 @@
         ],
         [
           {
-            "node": "Preparar error de autenticación",
+            "node": "Responder error de login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar respuesta de sesión": {
+      "main": [
+        [
+          {
+            "node": "Responder validación de sesión",
             "type": "main",
             "index": 0
           }
@@ -734,7 +897,7 @@
         ],
         [
           {
-            "node": "Preparar error de autenticación",
+            "node": "Responder validación de sesión",
             "type": "main",
             "index": 0
           }
@@ -752,72 +915,7 @@
         ],
         [
           {
-            "node": "Devolver validación",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "¿Formato de token válido?": {
-      "main": [
-        [
-          {
-            "node": "Buscar sesión",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Devolver validación",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Buscar sesión": {
-      "main": [
-        [
-          {
-            "node": "Evaluar sesión",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Preparar error de autenticación",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Evaluar sesión": {
-      "main": [
-        [
-          {
-            "node": "¿Sesión vigente?",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Preparar error de autenticación",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Execute Sub-workflow Trigger": {
-      "main": [
-        [
-          {
-            "node": "Preparar validación de sesión",
+            "node": "Responder error de login",
             "type": "main",
             "index": 0
           }
@@ -828,29 +926,36 @@
       "main": [
         [
           {
-            "node": "Devolver validación",
+            "node": "Responder validación de sesión",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Preparar respuesta de sesión": {
+    "Preparar llamada de validación": {
       "main": [
         [
           {
-            "node": "Devolver validación",
+            "node": "Ejecutar validación compartida",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Preparar error de autenticación": {
+    "Ejecutar validación compartida": {
       "main": [
         [
           {
-            "node": "Devolver validación",
+            "node": "Responder validación de sesión",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error de login",
             "type": "main",
             "index": 0
           }
@@ -858,23 +963,44 @@
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate",
-    "timeSavedMode": "fixed",
-    "saveDataErrorExecution": "none",
-    "saveDataSuccessExecution": "none",
-    "saveExecutionProgress": false,
-    "saveManualExecutions": false,
-    "callerPolicy": "workflowsFromSameOwner",
-    "availableInMCP": false
+    "binaryMode": "separate"
   },
-  "versionId": "a07d24ab-bbd2-43fd-a87f-17f28e48fece",
+  "staticData": null,
   "meta": {
-    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+    "templateCredsSetupCompleted": true
   },
   "nodeGroups": [],
-  "id": "UwOk41MQnPHz9dxs",
-  "tags": []
+  "pinData": {},
+  "versionId": "4b2f61d3-39a1-4863-9804-9008ac9407e3",
+  "activeVersionId": "4b2f61d3-39a1-4863-9804-9008ac9407e3",
+  "versionCounter": 143,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-10-09T20:57:06.719Z",
+      "createdAt": "2026-10-09T20:57:06.719Z",
+      "role": "workflow:owner",
+      "workflowId": "bkD0flUFsZPmiMcq",
+      "projectId": "Io2OgvxqX2dWHxpm",
+      "project": {
+        "updatedAt": "2026-09-24T01:24:55.210Z",
+        "createdAt": "2026-09-23T02:09:17.501Z",
+        "id": "Io2OgvxqX2dWHxpm",
+        "name": "Fabian Enrique Uribe Rodriguez <computo.forencics795@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "e48cb428-b9d8-43e1-bbf7-b44932bdd1cb"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Version fcf8ca5d",
+    "description": ""
+  }
 }

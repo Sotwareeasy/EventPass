@@ -1,0 +1,9 @@
+n8n/
+docs/
+tests/
+scripts/
+workflow-src/
+config.local.json
+.env
+*.tmp.json
+test-results/

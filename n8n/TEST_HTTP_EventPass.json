@@ -1,0 +1,155 @@
+{
+  "name": "TEST_HTTP_EventPass",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "eventpass/diagnostico/http/fijo",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "4146ba83-0ca6-4c87-9e22-96547806cacd",
+      "name": "Webhook HTTP fijo",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "37fe8e80-9bb9-4a10-9d77-80cc2cfff577"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"ok\":true,\"diagnostico\":\"eventpass-http-v1\",\"prueba\":\"fija\",\"codigo_esperado\":201}",
+        "options": {
+          "responseCode": 201,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              },
+              {
+                "name": "X-EventPass-Diagnostico",
+                "value": "http-fijo-v1"
+              }
+            ]
+          }
+        }
+      },
+      "id": "6ad2ee86-86fc-4214-b930-6d182985c894",
+      "name": "Responder HTTP 201 fijo",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "eventpass/diagnostico/http",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e713e388-a3aa-4306-b95a-3ea602dbcb9c",
+      "name": "Webhook HTTP dinámico",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        260
+      ],
+      "webhookId": "8e0557ef-42bd-4dbd-8fc5-dd06d37adc1d"
+    },
+    {
+      "parameters": {
+        "jsCode": "const permitidos = [200, 201, 400, 401, 403, 409, 503];\nconst solicitado = $input.first().json.query?.codigo;\nconst texto = typeof solicitado === 'string' ? solicitado : '';\nconst valido = /^\\d{3}$/.test(texto) && permitidos.includes(Number(texto));\nconst status = valido ? Number(texto) : 400;\nreturn [{ json: {\n  status_http: status,\n  respuesta: {\n    ok: status >= 200 && status < 300,\n    diagnostico: 'eventpass-http-v1',\n    prueba: 'dinamica',\n    codigo_esperado: status,\n    parametro_valido: valido\n  }\n} }];"
+      },
+      "id": "19b36d11-cd25-4205-a911-5f19f6d8b5ba",
+      "name": "Preparar código HTTP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.respuesta }}",
+        "options": {
+          "responseCode": "={{ $json.status_http }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              },
+              {
+                "name": "X-EventPass-Diagnostico",
+                "value": "http-dinamico-v1"
+              }
+            ]
+          }
+        }
+      },
+      "id": "2853038e-bc1d-4aba-9cdc-fc0494aa577d",
+      "name": "Responder HTTP dinámico",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        520,
+        260
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook HTTP fijo": {
+      "main": [
+        [
+          {
+            "node": "Responder HTTP 201 fijo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook HTTP dinámico": {
+      "main": [
+        [
+          {
+            "node": "Preparar código HTTP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar código HTTP": {
+      "main": [
+        [
+          {
+            "node": "Responder HTTP dinámico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false
+  },
+  "pinData": {},
+  "tags": []
+}

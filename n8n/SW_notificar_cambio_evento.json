@@ -1,0 +1,211 @@
+{
+  "updatedAt": "2026-10-11T14:07:32.141Z",
+  "createdAt": "2026-10-11T13:56:34.801Z",
+  "id": "EPEventoAvisos",
+  "name": "SW_notificar_cambio_evento",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "172eeec1-a4ea-40f8-8280-dcc77e122c55",
+      "name": "Cambio de evento",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "7ca97881-2a7d-4384-9133-afa0c675e727",
+      "name": "Validar cambio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const x=$input.first().json;if(!/^EVT-[A-Za-z0-9_-]{1,76}$/.test(x.evento_id??'')||!x.clave_idempotencia||!x.mensaje)throw Error('Cambio de evento inválido');return [{json:x}];"
+      }
+    },
+    {
+      "id": "cbb1fcf5-e039-4d5d-bc7f-974d495ddb97",
+      "name": "Leer inscritos del evento",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UTRKTSwXLf64xb49NzyXvb_KL85L5_jNlwjX2c4ieFg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Inscripciones",
+          "mode": "name"
+        },
+        "options": {
+          "returnAllMatches": "returnAllMatches"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "evento_id",
+              "lookupValue": "={{ $json.evento_id }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jzVSx4ibnSlPFZiO",
+          "name": "Google Sheets account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "retryOnFail": false
+    },
+    {
+      "id": "d0886dfb-af28-431b-a061-29bc3e050718",
+      "name": "Preparar destinatarios",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        0
+      ],
+      "parameters": {
+        "jsCode": "function rows(items){return items.map(x=>x.json??x).filter(x=>Object.entries(x).some(([k,v])=>k!=='row_number'&&v!==null&&v!==undefined&&String(v).trim()!==''));}\nfunction eventStart(e){\n const date=String(e.fecha??'').trim(),time=String(e.hora??'').trim();\n if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time))throw Error('Fecha de evento inválida');\n const ms=Date.parse(date+'T00:00:00Z');if(!Number.isFinite(ms)||new Date(ms).toISOString().slice(0,10)!==date)throw Error('Fecha inexistente');\n return Date.parse(date+'T'+time+':00-05:00');\n}\nfunction planPromotions(events, registrations, users, now){\n const activeUsers=new Set(users.filter(u=>u.estado==='ACTIVO').map(u=>u.usuario_id));\n const seen=new Set();for(const r of registrations){if(!r.inscripcion_id||seen.has(r.inscripcion_id))throw Error('Inscripciones duplicadas o incompletas');seen.add(r.inscripcion_id);}\n const result=[];\n for(const e of events){\n  if(e.estado!=='PUBLICADO'||eventStart(e)<=now)continue;\n  const capacity=Number(e.capacidad);if(!Number.isSafeInteger(capacity)||capacity<1)throw Error('Capacidad inválida');\n  const list=registrations.filter(r=>r.evento_id===e.evento_id);\n  const active=list.filter(r=>['CONFIRMADA','LISTA_ESPERA'].includes(r.estado));\n  if(new Set(active.map(r=>r.usuario_id)).size!==active.length)throw Error('Usuario con varias inscripciones activas');\n  const occupied=list.filter(r=>r.estado==='CONFIRMADA').length;\n  if(occupied>capacity)throw Error('Sobreaforo');\n  const waiting=list.filter(r=>r.estado==='LISTA_ESPERA'&&activeUsers.has(r.usuario_id));\n  for(const r of waiting)if(!Number.isFinite(Date.parse(r.fecha_inscripcion)))throw Error('Fecha de espera inválida');\n  waiting.sort((a,b)=>Date.parse(a.fecha_inscripcion)-Date.parse(b.fecha_inscripcion)||a.inscripcion_id.localeCompare(b.inscripcion_id));\n  for(const r of waiting.slice(0,capacity-occupied))result.push({evento:e,inscripcion:r});\n }\n return result;\n}\nfunction planReminders(events,registrations,records,now){\n const keys=new Set(records.map(r=>r.clave_idempotencia));const result=[];\n for(const e of events){if(e.estado!=='PUBLICADO')continue;const start=eventStart(e);if(start<=now||start>now+86400000)continue;\n  for(const r of registrations){if(r.evento_id!==e.evento_id||r.estado!=='CONFIRMADA')continue;const key=`${r.usuario_id}:${e.evento_id}:24H`;if(keys.has(key))continue;keys.add(key);result.push({evento:e,inscripcion:r,clave:key});}\n }return result;\n}\nfunction editRegistration(user,body,record,event,now){\n const fail=(status,code,message)=>({status,respuesta:{ok:false,error:{codigo:code,mensaje:message}}});\n if(!body||Array.isArray(body)||typeof body!=='object'||Object.keys(body).some(k=>!['inscripcion_id','nombre_acreditacion','observaciones'].includes(k)))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','La solicitud contiene campos no permitidos.');\n if(!/^INS-[a-f0-9]{32}$/.test(body.inscripcion_id??''))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','Identificador inválido.');\n if(!record||record.usuario_id!==user||record.inscripcion_id!==body.inscripcion_id)return fail(404,'INSCRIPCION_NO_ENCONTRADA','No se encontró la inscripción.');\n if(!['CONFIRMADA','LISTA_ESPERA'].includes(record.estado))return fail(409,'INSCRIPCION_NO_EDITABLE','La inscripción no está activa.');\n if(!event||event.evento_id!==record.evento_id)throw Error('Evento inconsistente');\n if(!['PUBLICADO','CERRADO'].includes(event.estado)||eventStart(event)<=now)return fail(409,'PLAZO_EDICION_FINALIZADO','El evento no permite editar esta inscripción.');\n const name=typeof body.nombre_acreditacion==='string'?body.nombre_acreditacion.trim():'';\n const notes=typeof body.observaciones==='string'?body.observaciones.trim():body.observaciones===undefined?String(record.observaciones??''):null;\n if([...name].length<2||[...name].length>100||/[\\u0000-\\u001f\\u007f]/.test(name)||notes===null||[...notes].length>500||/[\\u0000-\\u001f\\u007f]/.test(notes))return fail(400,'SOLICITUD_INSCRIPCION_INVALIDA','Revisa el nombre de acreditación y las observaciones.');\n return {status:200,actualizacion:{inscripcion_id:record.inscripcion_id,nombre_acreditacion:name,observaciones:notes,fecha_actualizacion:new Date(now).toISOString()}};\n}\nconst x=$('Validar cambio').first().json;const users=new Set();return rows($input.all()).filter(r=>['CONFIRMADA','LISTA_ESPERA'].includes(r.estado)).filter(r=>{if(users.has(r.usuario_id))return false;users.add(r.usuario_id);return true;}).map(r=>({json:{usuario_id:r.usuario_id,evento_id:x.evento_id,inscripcion_id:r.inscripcion_id,tipo:'CAMBIO_EVENTO',titulo:'Actualización de tu evento',mensaje:x.mensaje,clave_idempotencia:x.clave_idempotencia+':'+r.usuario_id}}));"
+      }
+    },
+    {
+      "id": "3b64fbf3-8eb1-4c18-8c2e-87bdcf193aa2",
+      "name": "Notificar cada inscrito",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1040,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "EP09Notificacion",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "passThrough",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "mode": "each"
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Cambio de evento": {
+      "main": [
+        [
+          {
+            "node": "Validar cambio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar cambio": {
+      "main": [
+        [
+          {
+            "node": "Leer inscritos del evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer inscritos del evento": {
+      "main": [
+        [
+          {
+            "node": "Preparar destinatarios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar destinatarios": {
+      "main": [
+        [
+          {
+            "node": "Notificar cada inscrito",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "aa556272-9fa2-461c-ab50-0803c3efeb07",
+  "activeVersionId": "aa556272-9fa2-461c-ab50-0803c3efeb07",
+  "versionCounter": 2,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-10-11T13:56:34.801Z",
+      "createdAt": "2026-10-11T13:56:34.801Z",
+      "role": "workflow:owner",
+      "workflowId": "EPEventoAvisos",
+      "projectId": "Io2OgvxqX2dWHxpm",
+      "project": {
+        "updatedAt": "2026-09-24T01:24:55.210Z",
+        "createdAt": "2026-09-23T02:09:17.501Z",
+        "id": "Io2OgvxqX2dWHxpm",
+        "name": "Fabian Enrique Uribe Rodriguez <computo.forencics795@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "e48cb428-b9d8-43e1-bbf7-b44932bdd1cb"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

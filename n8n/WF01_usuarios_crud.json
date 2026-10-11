@@ -1,5 +1,11 @@
 {
+  "updatedAt": "2026-10-11T14:16:42.267Z",
+  "createdAt": "2026-10-09T03:16:40.818Z",
+  "id": "aIOhtIsQVWJe1ImL",
   "name": "WF01_usuarios_crud",
+  "description": null,
+  "active": true,
+  "isArchived": false,
   "nodes": [
     {
       "parameters": {
@@ -576,7 +582,8 @@
                 "value": "no-store"
               }
             ]
-          }
+          },
+          "responseCode": 503
         }
       },
       "type": "n8n-nodes-base.respondToWebhook",
@@ -589,7 +596,6 @@
       "name": "Responder error de perfil"
     }
   ],
-  "pinData": {},
   "connections": {
     "Registrar usuario": {
       "main": [
@@ -780,7 +786,6 @@
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
@@ -792,12 +797,40 @@
     "callerPolicy": "workflowsFromSameOwner",
     "availableInMCP": false
   },
-  "versionId": "03905a34-5ed5-4199-a541-b34294c96e39",
+  "staticData": null,
   "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+    "templateCredsSetupCompleted": true
   },
   "nodeGroups": [],
-  "id": "aIOhtIsQVWJe1ImL",
-  "tags": []
+  "pinData": {},
+  "versionId": "43f7f444-fe51-45f4-89ff-df32c5bb3fb0",
+  "activeVersionId": "43f7f444-fe51-45f4-89ff-df32c5bb3fb0",
+  "versionCounter": 161,
+  "triggerCount": 2,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-10-09T03:16:40.818Z",
+      "createdAt": "2026-10-09T03:16:40.818Z",
+      "role": "workflow:owner",
+      "workflowId": "aIOhtIsQVWJe1ImL",
+      "projectId": "Io2OgvxqX2dWHxpm",
+      "project": {
+        "updatedAt": "2026-09-24T01:24:55.210Z",
+        "createdAt": "2026-09-23T02:09:17.501Z",
+        "id": "Io2OgvxqX2dWHxpm",
+        "name": "Fabian Enrique Uribe Rodriguez <computo.forencics795@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "e48cb428-b9d8-43e1-bbf7-b44932bdd1cb"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
 }

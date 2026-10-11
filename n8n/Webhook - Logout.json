@@ -1,5 +1,11 @@
 {
+  "updatedAt": "2026-10-11T14:16:35.255Z",
+  "createdAt": "2026-10-09T21:54:17.110Z",
+  "id": "OFaeXqm3ALQS1xQE",
   "name": "Webhook - Logout",
+  "description": null,
+  "active": true,
+  "isArchived": false,
   "nodes": [
     {
       "parameters": {
@@ -137,8 +143,18 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"ok\": false,\n  \"error\": {\n    \"codigo\": \"LOGIN_NO_DISPONIBLE\",\n    \"mensaje\": \"No fue posible procesar el inicio de sesión.\"\n  }\n}",
-        "options": {}
+        "responseBody": "{\"ok\":false,\"error\":{\"codigo\":\"LOGOUT_NO_DISPONIBLE\",\"mensaje\":\"No fue posible cerrar la sesión. Consulta su estado antes de repetir.\"}}",
+        "options": {
+          "responseCode": 503,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
       },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
@@ -361,7 +377,6 @@
       "name": "Responder logout"
     }
   ],
-  "pinData": {},
   "connections": {
     "Webhook - Logout": {
       "main": [
@@ -483,17 +498,44 @@
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "3bff85e8-2614-48df-891e-9a6ff54cd9c2",
+  "staticData": null,
   "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+    "templateCredsSetupCompleted": true
   },
   "nodeGroups": [],
-  "id": "OFaeXqm3ALQS1xQE",
-  "tags": []
+  "pinData": {},
+  "versionId": "44b993f1-d88a-4a34-a474-ed5a64389d75",
+  "activeVersionId": "44b993f1-d88a-4a34-a474-ed5a64389d75",
+  "versionCounter": 61,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-10-09T21:54:17.110Z",
+      "createdAt": "2026-10-09T21:54:17.110Z",
+      "role": "workflow:owner",
+      "workflowId": "OFaeXqm3ALQS1xQE",
+      "projectId": "Io2OgvxqX2dWHxpm",
+      "project": {
+        "updatedAt": "2026-09-24T01:24:55.210Z",
+        "createdAt": "2026-09-23T02:09:17.501Z",
+        "id": "Io2OgvxqX2dWHxpm",
+        "name": "Fabian Enrique Uribe Rodriguez <computo.forencics795@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "e48cb428-b9d8-43e1-bbf7-b44932bdd1cb"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
 }

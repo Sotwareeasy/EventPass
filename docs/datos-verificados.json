@@ -1,0 +1,79 @@
+[
+  {
+    "evento_id": "EVT-123",
+    "nombre": "Cafe Ingenieros Desarrolladores",
+    "categoria": "Networking tecnológico",
+    "fecha": "2026-10-19",
+    "hora": "15:40",
+    "estado": "CANCELADO",
+    "capacidad": 250,
+    "confirmadas": 0,
+    "espera": 0
+  },
+  {
+    "evento_id": "EVT-126",
+    "nombre": "Foro Emprendedores Tecnologicos",
+    "categoria": "Networking emprendedor",
+    "fecha": "2026-10-13",
+    "hora": "15:30",
+    "estado": "BORRADOR",
+    "capacidad": 50,
+    "confirmadas": 0,
+    "espera": 0
+  },
+  {
+    "evento_id": "EVT-155",
+    "nombre": "Conexiones entre profesionales",
+    "categoria": "Networking profesional",
+    "fecha": "2026-11-20",
+    "hora": "18:30",
+    "estado": "PUBLICADO",
+    "capacidad": 20,
+    "confirmadas": 0,
+    "espera": 0
+  },
+  {
+    "evento_id": "EVT-166",
+    "nombre": "Café de conexiones tecnológicas 2026",
+    "categoria": "Networking tecnológico",
+    "fecha": "2026-10-09",
+    "hora": "18:30",
+    "estado": "PUBLICADO",
+    "capacidad": 15,
+    "confirmadas": 0,
+    "espera": 0
+  },
+  {
+    "evento_id": "EVT-167",
+    "nombre": "Encuentro de fundadores",
+    "categoria": "Networking emprendedor",
+    "fecha": "2026-11-21",
+    "hora": "10:00",
+    "estado": "PUBLICADO",
+    "capacidad": 12,
+    "confirmadas": 0,
+    "espera": 0
+  },
+  {
+    "evento_id": "EVT-168",
+    "nombre": "Conexión con un mentor",
+    "categoria": "Networking profesional",
+    "fecha": "2026-11-22",
+    "hora": "15:00",
+    "estado": "PUBLICADO",
+    "capacidad": 1,
+    "confirmadas": 0,
+    "espera": 0
+  },
+  {
+    "evento_id": "EVT-169",
+    "nombre": "Alianzas para emprender",
+    "categoria": "Networking emprendedor",
+    "fecha": "2026-11-23",
+    "hora": "17:00",
+    "estado": "PUBLICADO",
+    "capacidad": 25,
+    "confirmadas": 1,
+    "espera": 0
+  }
+]

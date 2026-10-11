@@ -1,5 +1,11 @@
 {
+  "updatedAt": "2026-10-11T05:04:12.300Z",
+  "createdAt": "2026-10-08T22:25:04.182Z",
+  "id": "5dxE47m3Aw4bBIRU",
   "name": "WF05_catalogo_publico",
+  "description": null,
+  "active": true,
+  "isArchived": false,
   "nodes": [
     {
       "parameters": {
@@ -306,7 +312,6 @@
       "onError": "continueErrorOutput"
     }
   ],
-  "pinData": {},
   "connections": {
     "Webhook - Catálogo público": {
       "main": [
@@ -421,17 +426,44 @@
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "c7e6c173-5fd4-47ae-affe-73773f65e1dd",
+  "staticData": null,
   "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+    "templateCredsSetupCompleted": true
   },
   "nodeGroups": [],
-  "id": "5dxE47m3Aw4bBIRU",
-  "tags": []
+  "pinData": {},
+  "versionId": "c7e6c173-5fd4-47ae-affe-73773f65e1dd",
+  "activeVersionId": "c7e6c173-5fd4-47ae-affe-73773f65e1dd",
+  "versionCounter": 86,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-10-08T22:25:04.182Z",
+      "createdAt": "2026-10-08T22:25:04.182Z",
+      "role": "workflow:owner",
+      "workflowId": "5dxE47m3Aw4bBIRU",
+      "projectId": "Io2OgvxqX2dWHxpm",
+      "project": {
+        "updatedAt": "2026-09-24T01:24:55.210Z",
+        "createdAt": "2026-09-23T02:09:17.501Z",
+        "id": "Io2OgvxqX2dWHxpm",
+        "name": "Fabian Enrique Uribe Rodriguez <computo.forencics795@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "e48cb428-b9d8-43e1-bbf7-b44932bdd1cb"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
 }

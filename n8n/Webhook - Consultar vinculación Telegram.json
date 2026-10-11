@@ -1,5 +1,11 @@
 {
+  "updatedAt": "2026-10-11T05:06:26.618Z",
+  "createdAt": "2026-10-10T03:57:46.458Z",
+  "id": "wWz6lTkpEbzv3Jnr",
   "name": "Webhook - Consultar vinculación Telegram",
+  "description": null,
+  "active": true,
+  "isArchived": false,
   "nodes": [
     {
       "parameters": {
@@ -203,7 +209,6 @@
       "name": "Responder error de consulta Telegram"
     }
   ],
-  "pinData": {},
   "connections": {
     "Webhook - Consultar vinculación Telegram": {
       "main": [
@@ -300,17 +305,44 @@
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "6744de74-bff6-4ee4-9201-fa7ccad992d1",
+  "staticData": null,
   "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+    "templateCredsSetupCompleted": true
   },
   "nodeGroups": [],
-  "id": "wWz6lTkpEbzv3Jnr",
-  "tags": []
+  "pinData": {},
+  "versionId": "6744de74-bff6-4ee4-9201-fa7ccad992d1",
+  "activeVersionId": "6744de74-bff6-4ee4-9201-fa7ccad992d1",
+  "versionCounter": 53,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-10-10T03:57:46.458Z",
+      "createdAt": "2026-10-10T03:57:46.458Z",
+      "role": "workflow:owner",
+      "workflowId": "wWz6lTkpEbzv3Jnr",
+      "projectId": "Io2OgvxqX2dWHxpm",
+      "project": {
+        "updatedAt": "2026-09-24T01:24:55.210Z",
+        "createdAt": "2026-09-23T02:09:17.501Z",
+        "id": "Io2OgvxqX2dWHxpm",
+        "name": "Fabian Enrique Uribe Rodriguez <computo.forencics795@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "e48cb428-b9d8-43e1-bbf7-b44932bdd1cb"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
 }

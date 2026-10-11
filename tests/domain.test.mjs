@@ -1,0 +1,15 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {eventStart,planPromotions,planReminders,editRegistration} from '../workflow-src/domain.mjs';
+const now=Date.parse('2030-01-01T10:00:00-05:00');
+const event={evento_id:'EVT-1',estado:'PUBLICADO',fecha:'2030-01-02',hora:'09:00',capacidad:2};
+const r=(id,user,date,state='LISTA_ESPERA')=>({inscripcion_id:id,usuario_id:user,evento_id:'EVT-1',fecha_inscripcion:date,estado:state});
+const users=['A','B','C'].map(usuario_id=>({usuario_id,estado:'ACTIVO'}));
+test('FIFO usa fecha, no orden_espera ni orden de Sheets',()=>{const out=planPromotions([event],[r('3','C','2029-12-31'),r('1','A','2029-12-01'),r('2','B','2029-12-15')],users,now);assert.deepEqual(out.map(x=>x.inscripcion.usuario_id),['A','B']);});
+test('solo promueve cupos libres',()=>assert.equal(planPromotions([event],[r('1','A','2029-12-01','CONFIRMADA'),r('2','B','2029-12-15'),r('3','C','2029-12-20')],users,now).length,1));
+test('no promueve a usuario inactivo ni eventos iniciados',()=>{assert.equal(planPromotions([event],[r('1','Z','2029-01-01')],users,now).length,0);assert.equal(planPromotions([event],[r('1','A','2029-01-01')],users,now+86400000).length,0);});
+test('sobreaforo y duplicado activo detienen el proceso',()=>{assert.throws(()=>planPromotions([{...event,capacidad:1}],[r('1','A','2029-01-01','CONFIRMADA'),r('2','B','2029-01-01','CONFIRMADA')],users,now));assert.throws(()=>planPromotions([event],[r('1','A','2029-01-01'),r('2','A','2029-01-02')],users,now));});
+test('recordatorio reservado no se envía de nuevo',()=>{const regs=[r('1','A','2029-01-01','CONFIRMADA')];assert.equal(planReminders([event],regs,[],now).length,1);assert.equal(planReminders([event],regs,[{clave_idempotencia:'A:EVT-1:24H',estado:'PENDIENTE'}],now).length,0);});
+test('rechaza fechas inexistentes',()=>assert.throws(()=>eventStart({...event,fecha:'2030-02-31'})));
+const id='INS-'+'a'.repeat(32);const record=r(id,'A','2029-01-01','CONFIRMADA');
+test('editar no permite cambiar propietario o estado',()=>{assert.equal(editRegistration('B',{inscripcion_id:id,nombre_acreditacion:'Nombre'},record,event,now).status,404);assert.equal(editRegistration('A',{inscripcion_id:id,nombre_acreditacion:'Nombre',estado:'CONFIRMADA'},record,event,now).status,400);});
+test('editar solo actualiza campos permitidos',()=>{const x=editRegistration('A',{inscripcion_id:id,nombre_acreditacion:' Nuevo ',observaciones:'Nota'},record,event,now);assert.equal(x.status,200);assert.equal(x.actualizacion.nombre_acreditacion,'Nuevo');assert.equal(x.actualizacion.estado,undefined);});

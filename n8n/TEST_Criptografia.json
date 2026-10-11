@@ -1,0 +1,55 @@
+{
+  "name": "TEST_Criptografia",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f4b69f09-8350-4492-8858-e2aa2a0bbd60",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const crypto = require('crypto');\n\n  // Texto ficticio para probar el algoritmo.\n  // No lo reemplaces por una contraseña personal.\n  const passwordPrueba = 'Solo-Prueba-EventPass-2026!';\n  const salt = crypto.randomBytes(16);\n\n  const parametros = {\n    N: 131072,\n    r: 8,\n    p: 1,\n    maxmem: 256 * 1024 * 1024,\n  };\n\n  const inicio = Date.now();\n\n  // Simulamos el registro.\n  const hashRegistro = crypto.scryptSync(\n    passwordPrueba,\n    salt,\n    64,\n    parametros\n  );\n\n  // Simulamos un login con la contraseña correcta.\n  const hashCorrecto = crypto.scryptSync(\n    passwordPrueba,\n    salt,\n    64,\n    parametros\n  );\n\n  // Simulamos un login con una contraseña incorrecta.\n  const hashIncorrecto = crypto.scryptSync(\n    'Otra-Clave-De-Prueba',\n    salt,\n    64,\n    parametros\n  );\n\n  const aceptaCorrecta = crypto.timingSafeEqual(\n    hashRegistro,\n    hashCorrecto\n  );\n\n  const rechazaIncorrecta = !crypto.timingSafeEqual(\n    hashRegistro,\n    hashIncorrecto\n  );\n\n  // Mostramos solo el resultado, no contraseñas, hashes ni salts.\n  return [{\n    json: {\n      ok: aceptaCorrecta && rechazaIncorrecta,\n      algoritmo: 'scrypt',\n      salt_bytes: salt.length,\n      hash_bytes: hashRegistro.length,\n      acepta_password_correcta: aceptaCorrecta,\n      rechaza_password_incorrecta: rechazaIncorrecta,\n      duracion_total_ms: Date.now() - inicio,\n    },\n  }];\n} catch (error) {\n  return [{\n    json: {\n      ok: false,\n      mensaje: 'La prueba criptográfica no pudo completarse.',\n      detalle: error.message,\n    },\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "cd8a6ec8-0665-40b6-89c9-e3fdea4d9866",
+      "name": "Probar hash y verificación"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Probar hash y verificación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "200180dc-2875-4273-8c0a-4b9eeb880044",
+  "meta": {
+    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+  },
+  "nodeGroups": [],
+  "id": "dfoQA1GxHjGAhtMc",
+  "tags": []
+}

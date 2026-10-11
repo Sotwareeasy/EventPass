@@ -1,5 +1,11 @@
 {
+  "updatedAt": "2026-10-11T05:06:18.394Z",
+  "createdAt": "2026-10-10T02:50:00.950Z",
+  "id": "v0HVXGHrtVDK6vov",
   "name": "WF03_vinculacion_telegram",
+  "description": null,
+  "active": true,
+  "isArchived": false,
   "nodes": [
     {
       "parameters": {
@@ -238,6 +244,14 @@
               {
                 "name": "Cache-Control",
                 "value": "no-store"
+              },
+              {
+                "name": "X-EventPass-Diagnostico",
+                "value": "wf03-codigo-v1"
+              },
+              {
+                "name": "X-EventPass-Estado",
+                "value": "={{ String($('Preparar código Telegram').first().json.status_http) }}"
               }
             ]
           }
@@ -246,8 +260,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        1408,
-        -224
+        1888,
+        -256
       ],
       "id": "2783aabf-0186-4fb2-9960-9568fded33d5",
       "name": "Responder código Telegram"
@@ -999,9 +1013,41 @@
           "name": "EventPass - Telegram"
         }
       }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $('Preparar código Telegram').first().json.respuesta }}",
+        "options": {
+          "responseCode": 201,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              },
+              {
+                "name": "X-EventPass-Diagnostico",
+                "value": "wf03-creado-v2"
+              },
+              {
+                "name": "X-EventPass-Estado",
+                "value": "201"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1728,
+        -80
+      ],
+      "id": "3b68becb-202c-40e2-bb8d-68335b4b39ce",
+      "name": "Responder código creado"
     }
   ],
-  "pinData": {},
   "connections": {
     "Webhook - Solicitar código Telegram": {
       "main": [
@@ -1083,7 +1129,7 @@
       "main": [
         [
           {
-            "node": "Responder código Telegram",
+            "node": "Responder código creado",
             "type": "main",
             "index": 0
           }
@@ -1383,7 +1429,6 @@
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
@@ -1395,12 +1440,40 @@
     "callerPolicy": "workflowsFromSameOwner",
     "availableInMCP": false
   },
-  "versionId": "1f65640f-f27d-44bc-8468-5904dd1f57dd",
+  "staticData": null,
   "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "6116f358186235eb86c698bd2722386a1e4eb1f1a12fb4a7d4bc6cdfb101834e"
+    "templateCredsSetupCompleted": true
   },
   "nodeGroups": [],
-  "id": "v0HVXGHrtVDK6vov",
-  "tags": []
+  "pinData": {},
+  "versionId": "0d0bfb3d-8c7d-4a26-be3f-ab2aa6903a0f",
+  "activeVersionId": "0d0bfb3d-8c7d-4a26-be3f-ab2aa6903a0f",
+  "versionCounter": 213,
+  "triggerCount": 2,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-10-10T02:50:00.950Z",
+      "createdAt": "2026-10-10T02:50:00.950Z",
+      "role": "workflow:owner",
+      "workflowId": "v0HVXGHrtVDK6vov",
+      "projectId": "Io2OgvxqX2dWHxpm",
+      "project": {
+        "updatedAt": "2026-09-24T01:24:55.210Z",
+        "createdAt": "2026-09-23T02:09:17.501Z",
+        "id": "Io2OgvxqX2dWHxpm",
+        "name": "Fabian Enrique Uribe Rodriguez <computo.forencics795@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "e48cb428-b9d8-43e1-bbf7-b44932bdd1cb"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Version 0d0bfb3d",
+    "description": ""
+  }
 }
