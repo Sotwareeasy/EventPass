@@ -7,3 +7,4 @@ config.local.json
 .env
 *.tmp.json
 test-results/
+*.log

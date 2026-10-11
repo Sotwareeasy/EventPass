@@ -1,0 +1,17 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {evaluateCheckin} from '../workflow-src/checkin.mjs';
+import {planPromotions,planReminders,editRegistration} from '../workflow-src/domain.mjs';
+const id='INS-'+'a'.repeat(32),body={inscripcion_id:id,evento_id:'EVT-QA'},event={evento_id:'EVT-QA',estado:'PUBLICADO',capacidad:1,fecha:'2099-10-11',hora:'15:00'};
+const reg={inscripcion_id:id,evento_id:event.evento_id,usuario_id:'USER-A',estado:'CONFIRMADA'};
+const run=(r=reg,b=body,h=[],es=[event])=>evaluateCheckin('USER-A',b,r?[r]:[],es,h);
+test('check-in válido pasa de CONFIRMADA a ASISTIO',()=>{const r=run();assert.equal(r.status,201);assert.equal(r.respuesta.data.estado,'ASISTIO');assert.equal(reg.estado,'CONFIRMADA');});
+test('duplicado no produce otra transición ni notificación',()=>{const r=run({...reg,estado:'ASISTIO'},body,[{inscripcion_id:id,resultado:'EXITOSO'}]);assert.equal(r.status,409);assert.equal(r.resultado,'DUPLICADO');assert.equal(r.inscripcion,undefined);});
+for(const state of ['LISTA_ESPERA','CANCELADA','OTRO'])test('rechaza estado '+state,()=>assert.equal(run({...reg,estado:state}).respuesta.error.codigo,'CHECKIN_ESTADO_NO_PERMITIDO'));
+test('rechaza evento equivocado antes de informar duplicado',()=>assert.equal(run(reg,{...body,evento_id:'EVT-OTRO'},[],[{...event,evento_id:'EVT-OTRO'}]).respuesta.error.codigo,'CHECKIN_EVENTO_INCORRECTO'));
+test('rechaza inscripción ausente o ajena sin revelar propietario',()=>{assert.deepEqual(run(null),run({...reg,usuario_id:'OTRO'}));assert.equal(run(null).status,404);});
+test('rechaza evento inexistente y evento cancelado',()=>{assert.equal(run(reg,body,[],[]).status,404);assert.equal(run(reg,body,[],[{...event,estado:'CANCELADO'}]).status,409);});
+test('reserva incompleta exige revisión y nunca repite la escritura',()=>assert.equal(run(reg,body,[{inscripcion_id:id,resultado:'EXITOSO'}]).status,503));
+test('ASISTIO impide repetir incluso ante historial faltante',()=>assert.equal(run({...reg,estado:'ASISTIO'}).resultado,'DUPLICADO'));
+test('ignora intentos rechazados previos',()=>assert.equal(run(reg,body,[{inscripcion_id:id,resultado:'RECHAZADO'}]).status,201));
+test('rechaza campos inyectados y sesión ausente',()=>{assert.equal(run(reg,{...body,usuario_id:'OTRO'}).status,400);assert.equal(evaluateCheckin('',body,[],[],[]).status,401);});
+test('ASISTIO sigue ocupando cupo y no recibe recordatorios',()=>{const regs=[{...reg,estado:'ASISTIO'},{...reg,inscripcion_id:'INS-b',usuario_id:'USER-B',estado:'LISTA_ESPERA',fecha_inscripcion:'2026-01-01'}];assert.deepEqual(planPromotions([event],regs,[{usuario_id:'USER-B',estado:'ACTIVO'}],Date.now()),[]);assert.deepEqual(planReminders([event],regs,[],Date.parse('2099-10-11T12:00:00Z')),[]);assert.equal(editRegistration('USER-A',{inscripcion_id:id,nombre_acreditacion:'QA'},regs[0],event,Date.now()).status,409);});

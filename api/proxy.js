@@ -3,7 +3,7 @@ const routes = new Map([
   ['auth/login', ['POST']], ['auth/logout', ['POST']], ['auth/sesion', ['GET']],
   ['telegram/codigo', ['POST']], ['telegram/vinculacion', ['GET']],
   ['inscripciones', ['GET', 'POST', 'PATCH']], ['inscripciones/cancelar', ['POST']],
-  ['soporte', ['POST']],
+  ['soporte', ['POST']], ['checkin', ['POST']],
 ]);
 export function resolveTarget(path, method, base, chat) {
   if (!routes.get(path)?.includes(method)) return null;

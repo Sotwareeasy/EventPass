@@ -1,5 +1,9 @@
 # Estado de verificación — 11 de octubre de 2026
 
+## Ampliación del examen
+
+Se añadió WF11, EP11_Checkin y la interfaz Check-in en un commit separado. Las pruebas y sus límites se detallan en [CHECKIN.md](CHECKIN.md). El rechazo sin sesión se comprobó contra el Webhook publicado de n8n: HTTP 401 y registro RECHAZADO en EP11. ASISTIO se integra en el cálculo de ocupación y en la consulta de inscripciones, sin habilitar cancelación o edición de asistencias.
+
 Repositorio existente: https://github.com/Sotwareeasy/EventPass
 
 Frontend público: https://eventpass-drab.vercel.app

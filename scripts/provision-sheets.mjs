@@ -3,6 +3,7 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 const root=process.cwd();
 const schemas={
+ EP11_Checkin:{Checkins:'checkin_id inscripcion_id evento_id usuario_id fecha_checkin resultado detalle'},
  EP07_Reasignaciones:{Reasignaciones:'reasignacion_id evento_id inscripcion_id usuario_id fecha orden_lista estado_anterior estado_nuevo resultado_notificacion'},
  EP08_Recordatorios:{Recordatorios:'recordatorio_id usuario_id evento_id inscripcion_id tipo_recordatorio fecha_programada fecha_envio estado clave_idempotencia'},
  EP09_Notificaciones:{Notificaciones:'notificacion_id usuario_id tipo titulo mensaje evento_id inscripcion_id fecha gmail_estado telegram_estado gmail_error telegram_error clave_idempotencia'},

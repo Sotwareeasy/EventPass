@@ -1,5 +1,71 @@
 # EventPass — Nos encontramos aquí
 
+## Examen — Check-in digital
+
+La ampliación añade **WF11_checkin_digital** con Webhook y el archivo independiente **EP11_Checkin**, pestaña **Checkins**. En la web, el titular inicia sesión y selecciona **Mis inscripciones → Hacer check-in**, o introduce los identificadores en **Check-in**. La interfaz muestra carga, éxito, duplicado y rechazo, y bloquea el botón mientras se procesa la solicitud.
+
+### Endpoint y contrato
+
+`POST /webhook/eventpass/checkin` en n8n. El frontend utiliza `POST /api/eventpass/checkin` a través del proxy de Vercel. Requiere `Authorization: Bearer <token de sesión>` y `Content-Type: application/json`.
+
+```json
+{"inscripcion_id":"INS-0123456789abcdef0123456789abcdef","evento_id":"EVT-169"}
+```
+
+Éxito: **HTTP 201**, una fila EXITOSO y actualización **CONFIRMADA → ASISTIO**:
+
+```json
+{
+  "ok": true,
+  "mensaje": "Check-in realizado correctamente.",
+  "data": {
+    "resultado": "EXITOSO",
+    "checkin_id": "CHK-0123456789abcdef0123456789abcdef",
+    "inscripcion_id": "INS-0123456789abcdef0123456789abcdef",
+    "evento_id": "EVT-169",
+    "estado": "ASISTIO",
+    "fecha_checkin": "2026-10-11T17:00:00.000Z"
+  },
+  "notificacion": {"gmail":"ENVIADO","telegram":"ENVIADO"}
+}
+```
+
+Los identificadores y la fecha anteriores son ejemplos de contrato. Los estados de notificación reflejan la respuesta de WF09; no se simula una entrega cuando un canal falla.
+
+Duplicado: **HTTP 409**, sin nueva actualización ni nueva notificación:
+
+```json
+{"ok":false,"error":{"codigo":"CHECKIN_DUPLICADO","mensaje":"El ingreso ya había sido registrado."},"data":{"resultado":"DUPLICADO","checkin_id":"CHK-identificador-del-intento"}}
+```
+
+Otros resultados: **400** petición inválida, **401** sin sesión válida, **404** inscripción inexistente/ajena o evento inexistente, **409** estado no permitido/evento incorrecto/evento no disponible, **503** indisponibilidad o intento inconcluso que necesita revisión. Los rechazos funcionales utilizan `data.resultado=RECHAZADO` y un código específico en `error.codigo`.
+
+### Validaciones y persistencia
+
+- Sesión válida y usuario activo mediante **SW_validar_sesion**. Solo se permite registrar el ingreso del titular; los IDs no conceden acceso a una inscripción ajena.
+- Inscripción existente y única; evento existente y único; correspondencia exacta inscripción-evento.
+- Inscripción **CONFIRMADA**; se rechazan LISTA_ESPERA, CANCELADA y otros estados. Un ASISTIO previo se trata como duplicado.
+- Evento PUBLICADO o CERRADO. Un evento CANCELADO o BORRADOR no admite ingresos. El examen no define una ventana horaria de check-in: esta versión permite el registro explícito del titular sin comprobar presencia física, ubicación ni horario.
+- Historial de EP11 sin éxito previo ni operación incompleta. El estado ASISTIO aporta una segunda defensa contra repetición.
+
+Campos de **EP11_Checkin / Checkins**: `checkin_id`, `inscripcion_id`, `evento_id`, `usuario_id`, `fecha_checkin`, `resultado`, `detalle`. Resultado final: **EXITOSO**, **RECHAZADO** o **DUPLICADO**. `detalle` contiene el código y el HTTP del intento; no almacena tokens ni contraseñas. Fecha ISO en UTC, presentada en hora de Colombia.
+
+Cada intento registra su propio ID. Se reserva primero una fila RECHAZADO con `CHECKIN_EN_PROCESO` (todavía no se ha concedido el ingreso), se actualiza únicamente la inscripción seleccionada y se relee para verificar ASISTIO y los campos que deben conservarse. Solo entonces la reserva cambia a EXITOSO. Se añade auditoría CHECKIN en EP06. Los intentos rechazados/duplicados no alteran la inscripción y quedan en filas separadas de EP11.
+
+**Idempotencia:** historial por `inscripcion_id`, comprobación de ASISTIO y ejecución serial en el worker existente con `--concurrency=1`. Una reserva inconclusa bloquea nuevos ingresos para esa inscripción y devuelve 503 para revisión. Sheets no ofrece transacciones entre archivos: no aumentar la concurrencia ni ejecutar escrituras manuales simultáneas sin incorporar un bloqueo distribuido. No se promete recuperación automática de una escritura parcial.
+
+### Notificaciones e integración
+
+WF11 llama mediante **Execute Sub-workflow** a **WF09_notificaciones**, sin duplicar nodos Gmail/Telegram. Envía `usuario_id`, `tipo=CHECKIN`, título, mensaje, evento, inscripción y `clave_idempotencia=CHECKIN:<inscripcion_id>`. WF09 intenta ambos canales y conserva sus resultados independientes. Un fallo de notificación no revierte una asistencia ya confirmada; la interfaz muestra el resultado disponible. Un duplicado no llama nuevamente a WF09.
+
+ASISTIO sigue ocupando cupo en el catálogo, nuevas inscripciones y reasignación. Impide otra inscripción activa para el mismo usuario/evento, se muestra en la consulta y no permite edición/cancelación ni nuevos recordatorios. Las demás rutas mantienen sus contratos.
+
+### Verificación y entrega
+
+`npm test` ejecuta los casos de éxito, duplicado, cancelada, espera, evento incorrecto, propietario ajeno, ausencia de sesión y fallos parciales, además de regresiones de cupos. Los tests del grafo ejecutan los Code nodes de WF11 con adaptadores de Sheets/sesión/notificaciones en memoria: no prueban recepción real de mensajes. `npx playwright test` comprueba la interfaz con respuestas HTTP controladas.
+
+El JSON de entrega **[n8n/WF11_checkin_digital.json](n8n/WF11_checkin_digital.json)** se exporta desde la instancia n8n después de importar y publicar el flujo. Véase [docs/CHECKIN.md](docs/CHECKIN.md) para comprobaciones reales, recuperación y límites de la evidencia.
+
 Proyecto integrador de **Fabian Uribe**. Aplicación de encuentros de networking con frontend React, API y automatizaciones n8n y persistencia independiente por dominio en Google Sheets.
 
 - Aplicación: https://eventpass-drab.vercel.app

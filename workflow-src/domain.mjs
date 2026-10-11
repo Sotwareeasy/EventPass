@@ -13,9 +13,9 @@ export function planPromotions(events, registrations, users, now){
   if(e.estado!=='PUBLICADO'||eventStart(e)<=now)continue;
   const capacity=Number(e.capacidad);if(!Number.isSafeInteger(capacity)||capacity<1)throw Error('Capacidad inválida');
   const list=registrations.filter(r=>r.evento_id===e.evento_id);
-  const active=list.filter(r=>['CONFIRMADA','LISTA_ESPERA'].includes(r.estado));
+  const active=list.filter(r=>['CONFIRMADA','LISTA_ESPERA','ASISTIO'].includes(r.estado));
   if(new Set(active.map(r=>r.usuario_id)).size!==active.length)throw Error('Usuario con varias inscripciones activas');
-  const occupied=list.filter(r=>r.estado==='CONFIRMADA').length;
+  const occupied=list.filter(r=>['CONFIRMADA','ASISTIO'].includes(r.estado)).length;
   if(occupied>capacity)throw Error('Sobreaforo');
   const waiting=list.filter(r=>r.estado==='LISTA_ESPERA'&&activeUsers.has(r.usuario_id));
   for(const r of waiting)if(!Number.isFinite(Date.parse(r.fecha_inscripcion)))throw Error('Fecha de espera inválida');
