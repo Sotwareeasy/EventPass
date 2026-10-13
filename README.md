@@ -214,3 +214,9 @@ node scripts/export-workflows.mjs WF09_notificaciones.json
 La publicación Vercel utiliza `npm run build`, salida `dist` y `api/proxy.js`. Configurar las variables del servidor en el proyecto Vercel. El host de n8n y el túnel ngrok deben permanecer encendidos y accesibles para que la web funcione. Una URL Vercel accesible no vuelve permanente un backend que depende de un equipo local.
 
 Consulta [docs/REQUISITOS.md](docs/REQUISITOS.md), [docs/ESTADO.md](docs/ESTADO.md) y [docs/OPERACION.md](docs/OPERACION.md) para la aceptación y los procedimientos de revisión.
+
+### Formularios administrativos detrás de Ngrok
+
+- [Corrección y despliegue de formularios públicos](docs/FORMULARIOS_PRODUCCION.md).
+
+El ajuste para formularios de n8n detrás de Ngrok se prepara con `scripts/configure-production-forms.py`; requiere aplicarlo en el servidor Docker, además de descargar este repositorio. No cambia las reglas del negocio ni elimina la autenticación administrativa.
